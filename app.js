@@ -397,6 +397,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
+        if (settings.showGrid !== undefined) {
+            engine.showGrid = settings.showGrid;
+            const toggleGridBtn = document.getElementById('toggle-grid');
+            if (toggleGridBtn) {
+                if (engine.showGrid) {
+                    toggleGridBtn.style.background = 'rgba(56, 189, 248, 0.1)';
+                    toggleGridBtn.style.color = '#0ea5e9';
+                } else {
+                    toggleGridBtn.style.background = 'rgba(0, 0, 0, 0.1)';
+                    toggleGridBtn.style.color = 'var(--text-muted)';
+                }
+            }
+        }
         if (settings.wallThickness !== undefined) {
             if (wallThicknessInput) wallThicknessInput.value = settings.wallThickness;
             if (thicknessVal) thicknessVal.innerText = `${settings.wallThickness}\"`;
@@ -429,6 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     bgColor: engine.bgColor || '#1e1e22',
                     northAngle: engine.northAngle || 0,
                     showVastu: engine.showVastu || false,
+                    showGrid: engine.showGrid !== undefined ? engine.showGrid : true,
                     hideStructure: engine.hideStructure || false,
                     wallThickness: parseInt(wallThicknessInput.value, 10) || 9,
                     wallLineType: document.getElementById('wall-line-type')?.value || 'solid'
@@ -585,6 +599,21 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 toggleVastuBtn.style.background = 'rgba(99, 102, 241, 0.1)';
                 toggleVastuBtn.style.color = 'var(--primary)';
+            }
+            engine.render();
+        });
+    }
+
+    const toggleGridBtn = document.getElementById('toggle-grid');
+    if (toggleGridBtn) {
+        toggleGridBtn.addEventListener('click', () => {
+            engine.showGrid = !engine.showGrid;
+            if (engine.showGrid) {
+                toggleGridBtn.style.background = 'rgba(56, 189, 248, 0.1)';
+                toggleGridBtn.style.color = '#0ea5e9';
+            } else {
+                toggleGridBtn.style.background = 'rgba(0, 0, 0, 0.1)';
+                toggleGridBtn.style.color = 'var(--text-muted)';
             }
             engine.render();
         });

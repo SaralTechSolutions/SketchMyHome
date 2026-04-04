@@ -12,6 +12,7 @@ class CanvasEngine {
         
         this.scale = 1;
         this.showVastu = false;
+        this.showGrid = true;
         this.hideStructure = false;
         this.northAngle = 0;
         this.isLoading = false;
@@ -394,7 +395,7 @@ class CanvasEngine {
         this.ctx.scale(this.scale, this.scale);
 
         // 2. Draw grid
-        if (drawBackgroundAndGrid) {
+        if (drawBackgroundAndGrid && this.showGrid) {
             this.ctx.strokeStyle = this.gridColor;
             this.ctx.lineWidth = 1 / this.scale;
             this.ctx.beginPath();

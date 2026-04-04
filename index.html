@@ -99,13 +99,17 @@
 
             <div class="tools-group">
                 <h3>Settings</h3>
-                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
                     <button class="tool-btn" id="toggle-vastu" title="Toggle Vastu Grid"
-                        style="justify-content: center; flex: 1; border: 1px solid var(--border-light); background: rgba(99, 102, 241, 0.1); color: var(--primary); padding: 8px 4px;">
+                        style="justify-content: center; flex: 1 1 30%; border: 1px solid var(--border-light); background: rgba(99, 102, 241, 0.1); color: var(--primary); padding: 8px 4px; min-width: 0;">
                         <i data-lucide="grid" style="width:14px;height:14px;"></i> Vastu
                     </button>
+                    <button class="tool-btn" id="toggle-grid" title="Hide/Show Grid Lines"
+                        style="justify-content: center; flex: 1 1 30%; border: 1px solid var(--border-light); background: rgba(56, 189, 248, 0.1); color: #0ea5e9; padding: 8px 4px; min-width: 0;">
+                        <i data-lucide="layout-grid" style="width:14px;height:14px;"></i> Grid
+                    </button>
                     <button class="tool-btn" id="toggle-structure" title="Hide Walls/Rooms on Export"
-                        style="justify-content: center; flex: 1; border: 1px solid var(--border-light); background: rgba(239, 68, 68, 0.1); color: var(--danger); padding: 8px 4px;">
+                        style="justify-content: center; flex: 1 1 30%; border: 1px solid var(--border-light); background: rgba(239, 68, 68, 0.1); color: var(--danger); padding: 8px 4px; min-width: 0;">
                         <i data-lucide="eye-off" style="width:14px;height:14px;"></i> Struct
                     </button>
                 </div>
