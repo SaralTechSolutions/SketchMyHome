@@ -879,6 +879,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 editAltitudeContainer.style.display = 'none';
                 rotateContainer.style.display = 'none';
                 hideTextControls();
+            } else if (item.type === 'area_measure') {
+                let areaPx = 0;
+                for (let i = 0; i < item.points.length; i++) {
+                    const current = item.points[i];
+                    const next = item.points[(i + 1) % item.points.length];
+                    areaPx += current.x * next.y;
+                    areaPx -= next.x * current.y;
+                }
+                areaPx = Math.abs(areaPx) / 2;
+                const areaSqFt = (areaPx / (engine.gridSize * engine.gridSize)).toFixed(2);
+                infoDiv.innerHTML = `<strong>Area Measurement</strong><br/>Points: ${item.points.length}<br/>Area: ${areaSqFt} sq. ft`;
+                editThicknessContainer.style.display = 'none';
+                if (editLineTypeContainer) editLineTypeContainer.style.display = 'none';
+                editAltitudeContainer.style.display = 'none';
+                rotateContainer.style.display = 'none';
+                hideTextControls();
             }
         } else if (items.length > 1) {
             hideTextControls();

@@ -141,6 +141,33 @@ class ToolsManager {
             this.state.startX = x;
             this.state.startY = y;
         }
+        else if (this.currentTool === 'measure_area') {
+            if (!this.state.points) {
+                this.state.points = [{ x, y }];
+                this.state.isDrawing = true;
+            } else {
+                const firstPoint = this.state.points[0];
+                const distToFirst = Math.hypot(x - firstPoint.x, y - firstPoint.y);
+                const threshold = 15 / this.engine.scale;
+
+                if (distToFirst < threshold && this.state.points.length >= 3) {
+                    // Close the shape and create persistent measure_area
+                    const newItem = {
+                        id: `area-${Math.random().toString(36).substr(2, 9)}`,
+                        type: 'area_measure',
+                        points: [...this.state.points]
+                    };
+                    this.engine.addShape(newItem);
+                    this.state = {}; // Clear state
+                    this.engine.selectItem(newItem);
+                    const selBtn = document.querySelector('[data-tool="select"]');
+                    if (selBtn) selBtn.click();
+                } else {
+                    // Just add the point if it's not close enough or not enough points yet
+                    this.state.points.push({ x, y });
+                }
+            }
+        }
         else if (typeof ElementRegistry !== 'undefined' && ElementRegistry.get(this.currentTool)) {
             const def = ElementRegistry.get(this.currentTool);
             const width = def.width;
@@ -257,6 +284,11 @@ class ToolsManager {
             this.state.endY = y;
             this.engine.render();
         }
+        else if (this.currentTool === 'measure_area' && this.state.isDrawing) {
+            this.state.currX = x;
+            this.state.currY = y;
+            this.engine.render();
+        }
     }
 
     onMouseUp(e) {
@@ -345,6 +377,7 @@ class ToolsManager {
                 'i': 'window',
                 't': 'text',
                 'm': 'measure',
+                'a': 'measure_area',
                 'b': 'bed',
                 'c': 'chair',
                 'o': 'sofa'
@@ -390,6 +423,8 @@ class ToolsManager {
                         newItem.startY += offset;
                         newItem.endX += offset;
                         newItem.endY += offset;
+                    } else if (newItem.type === 'area_measure') {
+                        newItem.points = newItem.points.map(p => ({ x: p.x + offset, y: p.y + offset }));
                     }
                     this.engine.scene.push(newItem);
                     newItems.push(newItem);
@@ -418,10 +453,26 @@ class ToolsManager {
         if (e.key === 'Delete' || e.key === 'Backspace') {
             this.engine.deleteSelected(); 
         }
+        if (e.key === 'Enter') {
+            if (this.currentTool === 'measure_area' && this.state.points && this.state.points.length >= 3) {
+                const newItem = {
+                    id: `area-${Math.random().toString(36).substr(2, 9)}`,
+                    type: 'area_measure',
+                    points: [...this.state.points]
+                };
+                this.engine.addShape(newItem);
+                this.state = {};
+                this.engine.selectItem(newItem);
+                const selBtn = document.querySelector('[data-tool="select"]');
+                if (selBtn) selBtn.click();
+                this.engine.render();
+            }
+        }
         if (e.key === 'Escape') {
             this.engine.clearSelection();
             if (this.state.isDrawing) {
                 this.state.isDrawing = false;
+                this.state.points = null;
                 this.engine.render();
             }
         }
@@ -450,7 +501,7 @@ class ToolsManager {
 
         if (!this.state.isDrawing) {
             // Hover cursors crosshair mapping to snap grid
-            if (['wall', 'room', 'door', 'window', 'stairs', 'bed', 'table', 'measure'].includes(this.currentTool)) {
+            if (['wall', 'room', 'door', 'window', 'stairs', 'bed', 'table', 'measure', 'measure_area'].includes(this.currentTool)) {
                 const mx = this.engine.snap(this.engine.mouseX);
                 const my = this.engine.snap(this.engine.mouseY);
                 ctx.fillStyle = 'rgba(99, 102, 241, 0.5)';
@@ -458,6 +509,45 @@ class ToolsManager {
                 ctx.arc(mx, my, 4 / this.engine.scale, 0, Math.PI * 2);
                 ctx.fill();
             }
+            return;
+        }
+
+        if (this.currentTool === 'measure_area' && this.state.points) {
+            const points = this.state.points;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(99, 102, 241, 0.7)'; // 70% opacity
+            ctx.lineWidth = 2 / this.engine.scale;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            
+            // Draw current segment to mouse
+            if (this.state.currX !== undefined) {
+                const first = points[0];
+                const threshold = 15 / this.engine.scale;
+                const isNearStart = Math.hypot(this.state.currX - first.x, this.state.currY - first.y) < threshold;
+
+                if (isNearStart && points.length >= 3) {
+                    ctx.strokeStyle = 'rgba(34, 197, 94, 0.7)'; // Green for closing
+                    ctx.lineTo(first.x, first.y);
+                } else {
+                    ctx.lineTo(this.state.currX, this.state.currY);
+                }
+            }
+            ctx.stroke();
+
+            // Draw points
+            ctx.fillStyle = '#6366f1';
+            const r = 3 / this.engine.scale;
+            for (const p of points) {
+                ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+            }
+            ctx.restore();
             return;
         }
 

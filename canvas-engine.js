@@ -281,6 +281,21 @@ class CanvasEngine {
                     {x: item.endX, y: item.endY}
                 );
                 if (dist < 8) return item; // 8px tolerance
+            } else if (item.type === 'area_measure') {
+                // Check if point is inside the polygon (even if it's just lines, we usually hit test the fill area for measurement)
+                let inside = false;
+                for (let i = 0, j = item.points.length - 1; i < item.points.length; j = i++) {
+                    const xi = item.points[i].x, yi = item.points[i].y;
+                    const xj = item.points[j].x, yj = item.points[j].y;
+                    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                }
+                if (inside) return item;
+                // Or check distance to segments
+                for (let i = 0, j = item.points.length - 1; i < item.points.length; j = i++) {
+                    const dist = this.distToSegment({ x, y }, item.points[i], item.points[j]);
+                    if (dist < 8) return item;
+                }
             }
         }
         return null;
@@ -309,6 +324,14 @@ class CanvasEngine {
                     wMaxY >= minY && wMinY <= maxY) {
                     selected.push(item);
                 }
+            } else if (item.type === 'area_measure') {
+                const aMinX = Math.min(...item.points.map(p => p.x));
+                const aMaxX = Math.max(...item.points.map(p => p.x));
+                const aMinY = Math.min(...item.points.map(p => p.y));
+                const aMaxY = Math.max(...item.points.map(p => p.y));
+                if (aMaxX >= minX && aMinX <= maxX && aMaxY >= minY && aMinY <= maxY) {
+                    selected.push(item);
+                }
             }
         }
         return selected;
@@ -328,6 +351,11 @@ class CanvasEngine {
                 minY = Math.min(minY, item.startY, item.endY);
                 maxX = Math.max(maxX, item.startX, item.endX);
                 maxY = Math.max(maxY, item.startY, item.endY);
+            } else if (item.type === 'area_measure') {
+                minX = Math.min(minX, ...item.points.map(p => p.x));
+                minY = Math.min(minY, ...item.points.map(p => p.y));
+                maxX = Math.max(maxX, ...item.points.map(p => p.x));
+                maxY = Math.max(maxY, ...item.points.map(p => p.y));
             }
         }
         return { minX, minY, maxX, maxY };
@@ -438,6 +466,11 @@ class CanvasEngine {
         
         if (shape.type === 'object') {
             this.drawObject(shape, isInteractive, isSelected);
+            return;
+        }
+
+        if (shape.type === 'area_measure') {
+            this.drawAreaMeasure(shape, isInteractive, isSelected);
             return;
         }
 
@@ -611,6 +644,55 @@ class CanvasEngine {
             const hFt = this.pixelsToFeet(shape.height);
             this.ctx.fillText(`${wFt} × ${hFt}`, shape.x + shape.width / 2, shape.y + shape.height / 2);
         }
+    }
+
+    drawAreaMeasure(shape, isInteractive, isSelected) {
+        this.ctx.save();
+        this.ctx.strokeStyle = isSelected ? '#6366f1' : 'rgba(99, 102, 241, 0.7)';
+        this.ctx.lineWidth = 2 / this.scale;
+        this.ctx.fillStyle = isSelected ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.05)';
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(shape.points[0].x, shape.points[0].y);
+        for (let i = 1; i < shape.points.length; i++) {
+            this.ctx.lineTo(shape.points[i].x, shape.points[i].y);
+        }
+        this.ctx.closePath();
+        this.ctx.stroke();
+        this.ctx.fill();
+
+        // Calculate Area (Shoelace Formula)
+        let areaPx = 0;
+        let sumX = 0, sumY = 0;
+        for (let i = 0; i < shape.points.length; i++) {
+            const current = shape.points[i];
+            const next = shape.points[(i + 1) % shape.points.length];
+            areaPx += current.x * next.y;
+            areaPx -= next.x * current.y;
+            sumX += current.x;
+            sumY += current.y;
+        }
+        areaPx = Math.abs(areaPx) / 2;
+        const areaSqFt = areaPx / (this.gridSize * this.gridSize);
+        const centerX = sumX / shape.points.length;
+        const centerY = sumY / shape.points.length;
+
+        this.ctx.fillStyle = isSelected ? '#6366f1' : this.baseText;
+        const fontSize = 14 / this.scale;
+        this.ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(`${areaSqFt.toFixed(2)} sq. ft`, centerX, centerY);
+        
+        // Render points if selected
+        if (isSelected) {
+            this.ctx.fillStyle = '#6366f1';
+            const r = 4 / this.scale;
+            for (const p of shape.points) {
+                this.ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+            }
+        }
+        this.ctx.restore();
     }
     
     drawCornerAngles() {
