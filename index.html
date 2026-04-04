@@ -8,7 +8,7 @@
         content="Dream Home Designer — Professional zero-install 2D architectural floor plan designer with Vastu grid support.">
     <meta name="theme-color" content="#121214">
     <title>Dream Home Designer</title>
-    <link rel="icon" type="image/jpeg" href="logo.jpg">
+    <link rel="icon" type="image/jpeg" href="logo.png">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -130,8 +130,6 @@
             <!-- Sidebar Toolbar -->
             <aside class="toolbar" id="main-toolbar">
                 <div class="brand">
-                    <img src="logo.jpg" alt="Logo"
-                        style="width:24px;height:24px;border-radius:4px;margin-right:10px;object-fit:cover;border:1px solid var(--border-light);">
                     <input type="text" id="project-name" value="My Home" placeholder="Project Name"
                         style="background:transparent;border:none;border-bottom:1px solid var(--border-light);color:var(--text-main);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;letter-spacing:-0.5px;outline:none;width:100%;padding:2px 0;"
                         title="Click to rename project">
@@ -400,6 +398,13 @@
             </div>
         </div>
 
+        <!-- Always-Visible Logo Overlay (Bottom-Right, above Zoom Panel) -->
+        <div id="app-logo-overlay" class="app-logo-overlay"
+            style="position:fixed; bottom:120px; right:24px; z-index:5000; pointer-events:none; transition: all 0.3s ease;">
+            <img src="logo.png" alt="Logo"
+                style="width:88px; height:88px; border-radius:20px; background:white; padding:8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); object-fit:contain;">
+        </div>
+
         <!-- Documentation Modals -->
         <div id="modal-backdrop" class="modal-backdrop hidden">
             <!-- Shortcuts Modal -->
@@ -471,7 +476,8 @@
                     <section>
                         <h4>3. Precision Tools</h4>
                         <p>Enable <b>Grid</b> or <b>Vastu</b> from the <i>View</i> menu for better alignment. Use the
-                            <b>Guide</b> tool to show alignment crosshairs for pixel-perfect placement.</p>
+                            <b>Guide</b> tool to show alignment crosshairs for pixel-perfect placement.
+                        </p>
                     </section>
                     <section>
                         <h4>4. Exporting</h4>
@@ -488,24 +494,26 @@
                     <button class="modal-close">&times;</button>
                 </div>
                 <div class="modal-body" style="text-align: center;">
-                    <img src="logo.jpg" alt="Dream Home Designer Logo"
-                        style="width: 64px; height: 64px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); margin-bottom: 20px; object-fit: cover; border: 2px solid var(--primary);">
+                    <img src="logo.png" alt="Dream Home Designer Logo"
+                        style="width: 80px; height: 80px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); margin-bottom: 24px; object-fit: contain; border: 2px solid var(--primary); background: white; padding: 8px;">
                     <h2>Dream Home Designer</h2>
                     <p style="opacity: 0.7; margin-bottom: 24px;">Professional 2D Floor Plan Solution</p>
                     <p>Version 2.2.4 (Enterprise Edition)</p>
                     <p style="margin-top: 12px; font-size: 13px;">Built with Vanilla JS & HTML5 Canvas.<br>Secure AES
                         Encrypted Save System Enabled.</p>
                     <div class="dropdown-divider" style="margin: 20px 0;"></div>
-                    <p style="font-size: 11px; opacity: 0.5;">&copy; 2026 Roomio Architect Systems. All rights reserved.
+                    <p style="font-size: 11px; opacity: 0.5;">&copy; 2026 ProSaral Solutions. All rights reserved.
                     </p>
                 </div>
             </div>
         </div>
 
         <!-- Core modules (load order matters) -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
         <script src="event-bus.js"></script>
         <script src="elements.js"></script>
         <script src="crypto.js"></script>
+        <script src="branding-assets.js"></script>
         <script src="canvas-engine.js"></script>
         <script src="tools.js"></script>
         <script src="app.js"></script>

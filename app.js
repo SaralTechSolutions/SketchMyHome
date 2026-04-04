@@ -717,11 +717,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const exportBtn = document.getElementById('export-btn');
     if (exportBtn) {
-        exportBtn.addEventListener('click', () => {
-            const dataURL = engine.exportToDataURL();
+        exportBtn.addEventListener('click', async () => {
+            const projectName = getProjectName();
+            const projectData = {
+                scene: engine.scene,
+                settings: { northAngle: engine.northAngle }
+            };
+            const dataURL = await engine.exportToDataURL(projectName, projectData);
             const a = document.createElement('a');
             a.href = dataURL;
-            const filename = `${sanitizeFilename(getProjectName())}_${sanitizeFilename(getActiveDesignName())}.png`;
+            const filename = `${sanitizeFilename(projectName)}_${sanitizeFilename(getActiveDesignName())}.png`;
             a.download = filename;
             a.click();
         });

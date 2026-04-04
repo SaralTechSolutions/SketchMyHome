@@ -5,11 +5,11 @@ class CanvasEngine {
         this.scene = [];
         this.selectedItems = [];
         this.onSelectionChange = null;
-        
+
         // Settings
         this.gridSize = 25;
         this.snapToGrid = true;
-        
+
         this.scale = 1;
         this.showVastu = false;
         this.showGrid = true;
@@ -18,16 +18,16 @@ class CanvasEngine {
         this.hideStructure = false;
         this.northAngle = 0;
         this.isLoading = false;
-        
+
         // Callback bindings
         this.onSelectionChange = null;
         this.activeOverlayCallback = null;
         this.onSceneChange = null;
-        
+
         this.offsetX = 0;
         this.offsetY = 0;
         this.isPanning = false;
-        
+
         this.mouseX = 0;
         this.mouseY = 0;
 
@@ -40,15 +40,15 @@ class CanvasEngine {
         this.baseText = '#94a3b8';
         this.gridColor = 'rgba(255, 255, 255, 0.05)';
         this.exportWallColor = '#334155';
-        
+
         // Undo history
         this.undoStack = [];
         this.maxUndoSteps = 50;
         this._undoLock = false;
-        
+
         this.resize();
         this.setupPanAndZoom();
-        
+
         this.canvas.addEventListener('mousemove', (e) => {
             const rect = this.canvas.getBoundingClientRect();
             const clientX = e.clientX - rect.left;
@@ -57,7 +57,7 @@ class CanvasEngine {
             this.mouseY = (clientY - this.offsetY) / this.scale;
             if (!this.isPanning) this.render();
         });
-        
+
         this.updateContrastColors();
         this.render();
     }
@@ -78,11 +78,11 @@ class CanvasEngine {
             g = parseInt(hex.substr(2, 2), 16) || 0;
             b = parseInt(hex.substr(4, 2), 16) || 0;
         }
-        
+
         // ITU-R BT.709 Luma
         const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         this.isLightBg = luma > 128;
-        
+
         let cr = 255 - r, cg = 255 - g, cb = 255 - b;
         const diff = Math.abs(cr - r) + Math.abs(cg - g) + Math.abs(cb - b);
         if (diff < 80) {
@@ -90,7 +90,7 @@ class CanvasEngine {
             cg = this.isLightBg ? 0 : 255;
             cb = this.isLightBg ? 0 : 255;
         }
-        
+
         this.compColor = `rgb(${cr}, ${cg}, ${cb})`;
         this.wallColor = `rgb(${cr}, ${cg}, ${cb})`;
         this.compFill = `rgba(${cr}, ${cg}, ${cb}, 0.15)`;
@@ -111,7 +111,7 @@ class CanvasEngine {
             const rect = this.canvas.getBoundingClientRect();
             const mx = e.clientX - rect.left;
             const my = e.clientY - rect.top;
-            
+
             const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
             this.zoomAtPosition(mx, my, this.scale * zoomFactor);
         }, { passive: false });
@@ -186,7 +186,7 @@ class CanvasEngine {
         this.render();
         this.triggerSceneChange();
     }
-    
+
     triggerSceneChange() {
         if (!this._undoLock) {
             this.undoStack.push(JSON.parse(JSON.stringify(this.scene)));
@@ -231,7 +231,7 @@ class CanvasEngine {
         if (this.onSelectionChange) this.onSelectionChange(this.selectedItems);
         this.render();
     }
-    
+
     clearSelection() {
         if (this.selectedItems.length === 0) return;
         this.selectedItems = [];
@@ -277,7 +277,7 @@ class CanvasEngine {
         // Iterate backwards to pick top-most item
         for (let i = this.scene.length - 1; i >= 0; i--) {
             const item = this.scene[i];
-            
+
             if (item.type === 'room' || item.type === 'object') {
                 if (x >= item.x && x <= item.x + item.width &&
                     y >= item.y && y <= item.y + item.height) {
@@ -286,9 +286,9 @@ class CanvasEngine {
             } else if (item.type === 'wall' || item.type === 'measure') {
                 // Distance from point to line segment
                 const dist = this.distToSegment(
-                    {x, y}, 
-                    {x: item.startX, y: item.startY}, 
-                    {x: item.endX, y: item.endY}
+                    { x, y },
+                    { x: item.startX, y: item.startY },
+                    { x: item.endX, y: item.endY }
                 );
                 if (dist < 8) return item; // 8px tolerance
             } else if (item.type === 'area_measure') {
@@ -310,13 +310,13 @@ class CanvasEngine {
         }
         return null;
     }
-    
+
     hitTestBox(x1, y1, x2, y2) {
         const minX = Math.min(x1, x2);
         const maxX = Math.max(x1, x2);
         const minY = Math.min(y1, y2);
         const maxY = Math.max(y1, y2);
-        
+
         const selected = [];
         for (const item of this.scene) {
             if (item.type === 'room' || item.type === 'object') {
@@ -329,7 +329,7 @@ class CanvasEngine {
                 const wMaxX = Math.max(item.startX, item.endX);
                 const wMinY = Math.min(item.startY, item.endY);
                 const wMaxY = Math.max(item.startY, item.endY);
-                
+
                 if (wMaxX >= minX && wMinX <= maxX &&
                     wMaxY >= minY && wMinY <= maxY) {
                     selected.push(item);
@@ -346,7 +346,7 @@ class CanvasEngine {
         }
         return selected;
     }
-    
+
     getSelectionBounds() {
         if (!this.selectedItems || this.selectedItems.length <= 1) return null;
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -370,7 +370,7 @@ class CanvasEngine {
         }
         return { minX, minY, maxX, maxY };
     }
-    
+
     sqr(x) { return x * x }
     dist2(v, w) { return this.sqr(v.x - w.x) + this.sqr(v.y - w.y) }
     distToSegmentSquared(p, v, w) {
@@ -385,7 +385,7 @@ class CanvasEngine {
     buildJointCache() {
         this.jointCache = new Map();
         const eps = 0.1;
-        const getK = (x, y) => `${Math.round(x/eps)*eps},${Math.round(y/eps)*eps}`;
+        const getK = (x, y) => `${Math.round(x / eps) * eps},${Math.round(y / eps) * eps}`;
         for (const s of this.scene) {
             if (s.type !== 'wall' && s.type !== 'measure') continue;
             const k1 = getK(s.startX, s.startY);
@@ -400,7 +400,7 @@ class CanvasEngine {
     render(drawBackgroundAndGrid = true) {
         if (!this.ctx) return;
         this.buildJointCache();
-        
+
         this.ctx.save();
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         // 1. Clear background
@@ -411,7 +411,7 @@ class CanvasEngine {
         }
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.restore();
-        
+
         // Update contrast colors (cached — only recomputes when bgColor changes)
         this.updateContrastColors();
 
@@ -424,7 +424,7 @@ class CanvasEngine {
             this.ctx.strokeStyle = this.gridColor;
             this.ctx.lineWidth = 1 / this.scale;
             this.ctx.beginPath();
-            
+
             const startX = -this.offsetX / this.scale;
             const endX = startX + this.canvas.width / this.scale;
             const startY = -this.offsetY / this.scale;
@@ -448,7 +448,7 @@ class CanvasEngine {
         for (const shape of this.scene) {
             this.drawShape(shape, true);
         }
-        
+
         if (this.selectedItems && this.selectedItems.length > 1) {
             const b = this.getSelectionBounds();
             if (b) {
@@ -456,91 +456,91 @@ class CanvasEngine {
                 this.ctx.strokeStyle = '#38bdf8';
                 this.ctx.lineWidth = 1.5 / this.scale;
                 this.ctx.setLineDash([6 / this.scale, 4 / this.scale]);
-                
+
                 const pad = 10 / this.scale;
                 const bx = b.minX - pad;
                 const by = b.minY - pad;
                 const bw = (b.maxX - b.minX) + pad * 2;
                 const bh = (b.maxY - b.minY) + pad * 2;
-                
+
                 this.ctx.strokeRect(bx, by, bw, bh);
                 this.ctx.fillStyle = 'rgba(56, 189, 248, 0.04)';
                 this.ctx.fillRect(bx, by, bw, bh);
                 this.ctx.restore();
             }
         }
-        
+
         // 4. Draw Cursor Crosshairs if enabled
         if (drawBackgroundAndGrid && this.showCrosshairs && !this.isPanning) {
             this.ctx.save();
             this.ctx.strokeStyle = this.isLightBg ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.15)';
             this.ctx.lineWidth = 1 / this.scale;
             this.ctx.setLineDash([5 / this.scale, 5 / this.scale]);
-            
+
             const startX = -this.offsetX / this.scale;
             const endX = startX + this.canvas.width / this.scale;
             const startY = -this.offsetY / this.scale;
             const endY = startY + this.canvas.height / this.scale;
-            
+
             // Vertical line
             this.ctx.beginPath();
             this.ctx.moveTo(this.mouseX, startY);
             this.ctx.lineTo(this.mouseX, endY);
             this.ctx.stroke();
-            
+
             // Horizontal line
             this.ctx.beginPath();
             this.ctx.moveTo(startX, this.mouseY);
             this.ctx.lineTo(endX, this.mouseY);
             this.ctx.stroke();
-            
+
             this.ctx.restore();
         }
-        
+
         if (this.activeOverlayCallback) {
             this.activeOverlayCallback(this.ctx);
         }
-        
+
         if (this.showVastu) {
             this.drawVastuGrid();
         }
-        
+
         this.drawCornerAngles();
-        
+
         this.ctx.restore();
     }
 
     isJoint(x, y, id) {
         if (!this.jointCache) return false;
         const eps = 0.1;
-        const k = `${Math.round(x/eps)*eps},${Math.round(y/eps)*eps}`;
+        const k = `${Math.round(x / eps) * eps},${Math.round(y / eps) * eps}`;
         const IDs = this.jointCache.get(k);
         if (!IDs) return false;
         return IDs.some(otherId => otherId !== id);
-    }    drawWallOrMeasure(shape, isInteractive, isSelected) {
+    } drawWallOrMeasure(shape, isInteractive, isSelected) {
         const isMeasure = shape.type === 'measure';
         this.ctx.save();
-        
+
         if (isInteractive) {
-             this.ctx.strokeStyle = isSelected ? '#6366f1' : this.wallColor;
+            this.ctx.strokeStyle = isSelected ? '#6366f1' : this.wallColor;
         } else {
-             this.ctx.strokeStyle = isMeasure ? this.wallColor : this.exportWallColor; 
+            this.ctx.strokeStyle = isMeasure ? this.wallColor : this.exportWallColor;
         }
-        
+
         this.ctx.lineWidth = isMeasure ? 2 : (shape.thickness || 6);
         if (isMeasure) this.ctx.setLineDash([8 / this.scale, 6 / this.scale]);
         else if (shape.lineType === 'dotted') this.ctx.setLineDash([15 / this.scale, 10 / this.scale]);
-        
+
         this.ctx.lineCap = 'square';
         this.ctx.lineJoin = 'miter';
-        
+
         this.ctx.beginPath();
         this.ctx.moveTo(shape.startX, shape.startY);
         this.ctx.lineTo(shape.endX, shape.endY);
         this.ctx.stroke();
-        
+
         if (isMeasure || shape.lineType === 'dotted') this.ctx.setLineDash([]);
-        
+
         // Handles/Joints
         if (isInteractive) {
             const r = 4 / this.scale;
@@ -550,24 +550,24 @@ class CanvasEngine {
             const jointColor = '#22c55e';
 
             this.ctx.fillStyle = isStartJoint ? jointColor : standardColor;
-            this.ctx.fillRect(shape.startX - r, shape.startY - r, r*2, r*2);
+            this.ctx.fillRect(shape.startX - r, shape.startY - r, r * 2, r * 2);
             this.ctx.fillStyle = isEndJoint ? jointColor : standardColor;
-            this.ctx.fillRect(shape.endX - r, shape.endY - r, r*2, r*2);
+            this.ctx.fillRect(shape.endX - r, shape.endY - r, r * 2, r * 2);
         }
 
         // Text
         const dx = shape.endX - shape.startX;
         const dy = shape.endY - shape.startY;
-        const len = Math.sqrt(dx*dx + dy*dy);
-        const midX = shape.startX + dx/2;
-        const midY = shape.startY + dy/2;
-        
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const midX = shape.startX + dx / 2;
+        const midY = shape.startY + dy / 2;
+
         this.ctx.save();
         this.ctx.translate(midX, midY);
         let textAngle = Math.atan2(dy, dx);
-        if (textAngle > Math.PI/2 || textAngle < -Math.PI/2) textAngle += Math.PI;
+        if (textAngle > Math.PI / 2 || textAngle < -Math.PI / 2) textAngle += Math.PI;
         this.ctx.rotate(textAngle);
-        
+
         this.ctx.fillStyle = isInteractive ? (isSelected ? '#6366f1' : this.baseText) : this.baseText;
         const fontSize = 12 / this.scale;
         this.ctx.font = `${fontSize}px Inter, sans-serif`;
@@ -576,7 +576,7 @@ class CanvasEngine {
         const lenFt = this.pixelsToFeet(len);
         this.ctx.fillText(lenFt, 0, -6 / this.scale);
         this.ctx.restore();
-        
+
         this.ctx.restore();
     }
 
@@ -585,10 +585,10 @@ class CanvasEngine {
         this.ctx.fillStyle = isSelected ? 'rgba(99, 102, 241, 0.2)' : this.compFill;
         this.ctx.strokeStyle = isSelected ? '#6366f1' : this.compColor;
         this.ctx.lineWidth = 2;
-        
+
         this.ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
         this.ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-        
+
         // Text
         this.ctx.fillStyle = isInteractive ? (isSelected ? '#6366f1' : this.baseText) : this.baseText;
         const fontSize = 12 / this.scale;
@@ -598,14 +598,14 @@ class CanvasEngine {
         const wFt = this.pixelsToFeet(shape.width);
         const hFt = this.pixelsToFeet(shape.height);
         this.ctx.fillText(`${wFt} \u00d7 ${hFt}`, shape.x + shape.width / 2, shape.y + shape.height / 2);
-        
+
         if (isSelected) {
             const r = 4 / this.scale;
             this.ctx.fillStyle = '#6366f1';
-            this.ctx.fillRect(shape.x - r, shape.y - r, r*2, r*2);
-            this.ctx.fillRect(shape.x + shape.width - r, shape.y - r, r*2, r*2);
-            this.ctx.fillRect(shape.x - r, shape.y + shape.height - r, r*2, r*2);
-            this.ctx.fillRect(shape.x + shape.width - r, shape.y + shape.height - r, r*2, r*2);
+            this.ctx.fillRect(shape.x - r, shape.y - r, r * 2, r * 2);
+            this.ctx.fillRect(shape.x + shape.width - r, shape.y - r, r * 2, r * 2);
+            this.ctx.fillRect(shape.x - r, shape.y + shape.height - r, r * 2, r * 2);
+            this.ctx.fillRect(shape.x + shape.width - r, shape.y + shape.height - r, r * 2, r * 2);
         }
         this.ctx.restore();
     }
@@ -615,7 +615,7 @@ class CanvasEngine {
         const cx = shape.x + shape.width / 2;
         const cy = shape.y + shape.height / 2;
         this.ctx.translate(cx, cy);
-        
+
         const rot = shape.rotation || 0;
         this.ctx.rotate(rot * Math.PI / 180);
         this.ctx.scale(shape.flipX ? -1 : 1, shape.flipY ? -1 : 1);
@@ -645,13 +645,13 @@ class CanvasEngine {
             this.ctx.save();
             this.ctx.translate(this.offsetX, this.offsetY);
             this.ctx.scale(this.scale, this.scale);
-            
+
             const r = 4 / this.scale;
             this.ctx.fillStyle = '#6366f1';
-            this.ctx.fillRect(shape.x - r, shape.y - r, r*2, r*2);
-            this.ctx.fillRect(shape.x + shape.width - r, shape.y - r, r*2, r*2);
-            this.ctx.fillRect(shape.x - r, shape.y + shape.height - r, r*2, r*2);
-            this.ctx.fillRect(shape.x + shape.width - r, shape.y + shape.height - r, r*2, r*2);
+            this.ctx.fillRect(shape.x - r, shape.y - r, r * 2, r * 2);
+            this.ctx.fillRect(shape.x + shape.width - r, shape.y - r, r * 2, r * 2);
+            this.ctx.fillRect(shape.x - r, shape.y + shape.height - r, r * 2, r * 2);
+            this.ctx.fillRect(shape.x + shape.width - r, shape.y + shape.height - r, r * 2, r * 2);
         }
         this.ctx.restore();
     }
@@ -662,8 +662,8 @@ class CanvasEngine {
         }
 
         const isSelected = this.selectedItems.includes(shape);
-        
-        switch(shape.type) {
+
+        switch (shape.type) {
             case 'wall':
             case 'measure':
                 this.drawWallOrMeasure(shape, isInteractive, isSelected);
@@ -685,7 +685,7 @@ class CanvasEngine {
         this.ctx.strokeStyle = isSelected ? '#6366f1' : 'rgba(99, 102, 241, 0.7)';
         this.ctx.lineWidth = 2 / this.scale;
         this.ctx.fillStyle = isSelected ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.05)';
-        
+
         this.ctx.beginPath();
         this.ctx.moveTo(shape.points[0].x, shape.points[0].y);
         for (let i = 1; i < shape.points.length; i++) {
@@ -717,7 +717,7 @@ class CanvasEngine {
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(`${areaSqFt.toFixed(2)} sq. ft`, centerX, centerY);
-        
+
         // Render points if selected
         if (isSelected) {
             this.ctx.fillStyle = '#6366f1';
@@ -728,11 +728,11 @@ class CanvasEngine {
         }
         this.ctx.restore();
     }
-    
+
     drawCornerAngles() {
         const walls = this.scene.filter(s => s.type === 'wall');
         if (walls.length < 2) return;
-        
+
         const points = {};
         for (const wall of walls) {
             const p1 = `${wall.startX},${wall.startY}`;
@@ -742,48 +742,48 @@ class CanvasEngine {
             points[p1].push({ vx: wall.endX - wall.startX, vy: wall.endY - wall.startY, wall });
             points[p2].push({ vx: wall.startX - wall.endX, vy: wall.startY - wall.endY, wall });
         }
-        
+
         this.ctx.save();
         this.ctx.lineWidth = 1.5 / this.scale;
-        
+
         for (const key in points) {
             const lines = points[key];
             if (lines.length === 2) {
                 const [cx, cy] = key.split(',').map(Number);
-                
+
                 const l1 = lines[0];
                 const l2 = lines[1];
-                
+
                 let a1 = Math.atan2(l1.vy, l1.vx);
                 let a2 = Math.atan2(l2.vy, l2.vx);
-                
+
                 if (a1 > a2) {
                     const temp = a1; a1 = a2; a2 = temp;
                 }
-                
+
                 let diff = a2 - a1;
                 let startAngle = a1;
                 let endAngle = a2;
-                
+
                 if (diff > Math.PI) {
                     diff = 2 * Math.PI - diff;
                     startAngle = a2;
                     endAngle = a1 + 2 * Math.PI;
                 }
-                
+
                 const angleDeg = Math.round(diff * 180 / Math.PI);
-                
+
                 const r = 24 / this.scale;
                 this.ctx.beginPath();
                 this.ctx.arc(cx, cy, r, startAngle, endAngle);
                 this.ctx.strokeStyle = 'rgba(99, 102, 241, 0.7)';
                 this.ctx.stroke();
-                
+
                 const bisectAngle = startAngle + diff / 2;
                 const txtR = r + (10 / this.scale);
                 const tx = cx + Math.cos(bisectAngle) * txtR;
                 const ty = cy + Math.sin(bisectAngle) * txtR;
-                
+
                 this.ctx.fillStyle = 'rgba(99, 102, 241, 0.9)';
                 const fontSize = 10 / this.scale;
                 this.ctx.font = `${fontSize}px Inter, sans-serif`;
@@ -792,7 +792,7 @@ class CanvasEngine {
                 this.ctx.fillText(`${angleDeg}°`, tx, ty);
             }
         }
-        
+
         this.ctx.restore();
     }
 
@@ -800,10 +800,10 @@ class CanvasEngine {
         if (this.scene.length === 0) return null;
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         let hasGeometry = false;
-        
+
         for (const item of this.scene) {
             if (item.type === 'measure') continue;
-            
+
             hasGeometry = true;
             if (item.type === 'room' || item.type === 'object') {
                 minX = Math.min(minX, item.x);
@@ -837,7 +837,7 @@ class CanvasEngine {
             return;
         }
 
-        const padding = 50; 
+        const padding = 50;
         const availableW = this.canvas.width - padding * 2;
         const availableH = this.canvas.height - padding * 2;
 
@@ -848,7 +848,7 @@ class CanvasEngine {
         this.scale = scale;
         this.offsetX = (this.canvas.width / 2) - ((bounds.minX + bounds.maxX) / 2) * scale;
         this.offsetY = (this.canvas.height / 2) - ((bounds.minY + bounds.maxY) / 2) * scale;
-        
+
         this.render();
         const zoomInput = document.getElementById('zoom-val');
         if (zoomInput) {
@@ -861,10 +861,10 @@ class CanvasEngine {
     drawVastuGrid() {
         const bounds = this.getSceneBounds();
         if (!bounds) return;
-        
+
         const cellW = bounds.w / 3;
         const cellH = bounds.h / 3;
-        
+
         const vastuZones = [
             { name: 'North', bg: 'rgba(56, 189, 248, 0.2)', desc: 'Wealth / Light' }, // 0
             { name: 'Eesanyam (NE)', bg: 'rgba(59, 130, 246, 0.4)', desc: 'Pooja / Water' }, // 1
@@ -875,7 +875,7 @@ class CanvasEngine {
             { name: 'West', bg: 'rgba(148, 163, 184, 0.2)', desc: 'Study / Dining' }, // 6
             { name: 'Vayuvya (NW)', bg: 'rgba(156, 163, 175, 0.4)', desc: 'Guest / Toilets' } // 7
         ];
-        
+
         const brahmasthan = { name: 'Brahmasthan', bg: 'rgba(250, 204, 21, 0.35)', desc: 'Empty / Center' };
 
         // Determine dynamic assignment of zones
@@ -886,7 +886,7 @@ class CanvasEngine {
                     zones.push({ col, row, ...brahmasthan });
                     continue;
                 }
-                
+
                 let boxAngle = 0;
                 if (row === 0 && col === 0) boxAngle = 315;
                 else if (row === 0 && col === 1) boxAngle = 0;
@@ -896,34 +896,34 @@ class CanvasEngine {
                 else if (row === 2 && col === 1) boxAngle = 180;
                 else if (row === 2 && col === 0) boxAngle = 225;
                 else if (row === 1 && col === 0) boxAngle = 270;
-                
+
                 const offsetAngle = this.northAngle || 0;
                 // Difference between box's conceptual angle to UP with North's offset angle
                 let zoneAngle = (boxAngle - offsetAngle + 360) % 360;
                 let zoneIndex = Math.round(zoneAngle / 45) % 8;
-                
+
                 zones.push({ col, row, ...vastuZones[zoneIndex] });
             }
         }
-        
+
         this.ctx.save();
-        
+
         this.ctx.strokeStyle = '#6366f1';
         this.ctx.lineWidth = 3 / this.scale;
         this.ctx.setLineDash([15 / this.scale, 10 / this.scale]);
         this.ctx.strokeRect(bounds.minX, bounds.minY, bounds.w, bounds.h);
         this.ctx.setLineDash([]);
-        
+
         for (const zone of zones) {
             const bx = bounds.minX + (zone.col * cellW);
             const by = bounds.minY + (zone.row * cellH);
-            
+
             this.ctx.fillStyle = zone.bg;
             this.ctx.fillRect(bx, by, cellW, cellH);
             this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
             this.ctx.lineWidth = 1 / this.scale;
             this.ctx.strokeRect(bx, by, cellW, cellH);
-            
+
             this.ctx.fillStyle = '#ffffff';
             const f1 = (14 / this.scale);
             const f2 = (11 / this.scale);
@@ -931,23 +931,23 @@ class CanvasEngine {
             this.ctx.textBaseline = 'middle';
             this.ctx.shadowColor = 'rgba(0,0,0,0.85)';
             this.ctx.shadowBlur = 6 / this.scale;
-            
+
             this.ctx.font = `bold ${f1}px Inter, sans-serif`;
-            this.ctx.fillText(zone.name, bx + cellW/2, by + cellH/2 - (10/this.scale));
-            
+            this.ctx.fillText(zone.name, bx + cellW / 2, by + cellH / 2 - (10 / this.scale));
+
             this.ctx.font = `600 ${f2}px Inter, sans-serif`;
             this.ctx.fillStyle = '#e2e8f0';
-            this.ctx.fillText(zone.desc, bx + cellW/2, by + cellH/2 + (10/this.scale));
+            this.ctx.fillText(zone.desc, bx + cellW / 2, by + cellH / 2 + (10 / this.scale));
             this.ctx.shadowBlur = 0;
         }
-        
+
         this.ctx.restore();
     }
 
     drawCompass(x, y, angle) {
         this.ctx.save();
         this.ctx.translate(x, y);
-        
+
         // Background Circle
         this.ctx.beginPath();
         this.ctx.arc(0, 0, 45, 0, Math.PI * 2);
@@ -962,11 +962,11 @@ class CanvasEngine {
         this.ctx.font = 'bold 12px Inter, sans-serif';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        
+
         // Rotating Circle for Labels
         this.ctx.save();
         this.ctx.rotate(angle * Math.PI / 180);
-        
+
         this.ctx.fillStyle = '#6366f1';
         this.ctx.fillText('N', 0, -32);
         this.ctx.fillStyle = '#94a3b8';
@@ -978,7 +978,7 @@ class CanvasEngine {
         // Constant Needle (Facing Left: -90deg relative to Canvas TOP)
         this.ctx.save();
         this.ctx.rotate(-Math.PI / 2);
-        
+
         // North Needle (Primary - now 30% smaller: height ~25 instead of 35)
         this.ctx.beginPath();
         this.ctx.moveTo(-2, 0);
@@ -986,7 +986,7 @@ class CanvasEngine {
         this.ctx.lineTo(2, 0);
         this.ctx.fillStyle = '#6366f1';
         this.ctx.fill();
-        
+
         // South Needle
         this.ctx.beginPath();
         this.ctx.moveTo(-2, 0);
@@ -994,35 +994,140 @@ class CanvasEngine {
         this.ctx.lineTo(2, 0);
         this.ctx.fillStyle = '#475569';
         this.ctx.fill();
-        
+
         this.ctx.restore();
-        
+
         this.ctx.restore();
     }
 
-    exportToDataURL() {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = this.canvas.width;
-        tempCanvas.height = this.canvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
-        
-        const originalCtx = this.ctx;
-        const originalCanvas = this.canvas;
-        
-        // Trigger a high-quality render on a temporary context if needed
-        // For now, we just ensure the compass is drawn on the actual canvas before capture
-        const compassWidget = document.getElementById('compass-widget');
-        if (compassWidget) {
-            const rect = compassWidget.getBoundingClientRect();
-            const canvasRect = this.canvas.getBoundingClientRect();
-            // Calculate position relative to canvas
-            const x = (rect.left - canvasRect.left) + rect.width/2;
-            const y = (rect.top - canvasRect.top) + rect.height/2;
-            this.drawCompass(x, y, this.northAngle);
+    async exportToDataURL(projectName = 'Unsaved Design', projectData = null) {
+        try {
+            const footerHeight = 80;
+            const fy = this.canvas.height;
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = this.canvas.width;
+            exportCanvas.height = fy + footerHeight;
+            const eCtx = exportCanvas.getContext('2d');
+
+            // 1. Background
+            eCtx.fillStyle = this.bgColor || '#ffffff';
+            eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+            // 2. Draw Floor Plan
+            eCtx.drawImage(this.canvas, 0, 0);
+
+            // 3. Branding Assets
+            const logoData = window.OFFICIAL_LOGO_DATA;
+
+            // 4. Render Architectural Compass (if widget exists)
+            const compassWidget = document.getElementById('compass-widget');
+            if (compassWidget) {
+                const rect = compassWidget.getBoundingClientRect();
+                const canvasRect = this.canvas.getBoundingClientRect();
+                const cx = (rect.left - canvasRect.left) + rect.width / 2;
+                const cy = (rect.top - canvasRect.top) + rect.height / 2;
+
+                eCtx.save();
+                eCtx.translate(cx, cy);
+                eCtx.beginPath();
+                eCtx.arc(0, 0, 45, 0, Math.PI * 2);
+                eCtx.fillStyle = 'white'; eCtx.fill();
+                eCtx.strokeStyle = '#6366f1'; eCtx.lineWidth = 1.5; eCtx.stroke();
+
+                eCtx.save();
+                eCtx.rotate(this.northAngle * Math.PI / 180);
+                eCtx.fillStyle = '#6366f1'; eCtx.font = 'bold 12px Inter'; eCtx.textAlign = 'center';
+                eCtx.fillText('N', 0, -32);
+                eCtx.fillStyle = '#94a3b8'; eCtx.fillText('E', 32, 0); eCtx.fillText('S', 0, 32); eCtx.fillText('W', -32, 0);
+                eCtx.restore();
+
+                eCtx.rotate(-Math.PI / 2);
+                eCtx.beginPath(); eCtx.moveTo(-2, 0); eCtx.lineTo(0, -25); eCtx.lineTo(2, 0); eCtx.fillStyle = '#6366f1'; eCtx.fill();
+                eCtx.beginPath(); eCtx.moveTo(-2, 0); eCtx.lineTo(0, 25); eCtx.lineTo(2, 0); eCtx.fillStyle = '#475569'; eCtx.fill();
+                eCtx.restore();
+            }
+
+            // 5. Render Professional Footer (Highest Priority Rendering)
+            eCtx.fillStyle = '#0f172a'; // High-contrast midnight blue
+            eCtx.fillRect(0, fy, exportCanvas.width, footerHeight);
+
+            // Neon accent strip for modern technical aesthetic
+            eCtx.fillStyle = '#0ea5e9';
+            eCtx.fillRect(0, fy, exportCanvas.width, 4);
+
+            let logoXOffset = 30;
+            if (logoData) {
+                try {
+                    const logoSmall = new Image();
+                    await new Promise(r => {
+                        logoSmall.onload = r;
+                        logoSmall.onerror = r;
+                        logoSmall.src = logoData;
+                    });
+                    if (logoSmall.complete && logoSmall.naturalWidth > 0) {
+                        const sSize = 48;
+                        const sy = fy + (footerHeight - sSize) / 2 + 2;
+                        eCtx.drawImage(logoSmall, logoXOffset, sy, sSize, sSize);
+                        logoXOffset += 70;
+                    }
+                } catch (e) {
+                    console.warn("Small logo render bypassed");
+                }
+            }
+
+            const safeProjectName = (projectName || 'Untitled Design').toString().toUpperCase();
+
+            // Branding Text
+            eCtx.fillStyle = '#f8fafc';
+            eCtx.font = 'bold 18px "Inter", sans-serif';
+            eCtx.textAlign = 'left';
+            eCtx.fillText('PROSARAL SOLUTIONS', logoXOffset, fy + 38);
+
+            // Metadata Line
+            eCtx.font = '500 13px "Inter", sans-serif';
+            eCtx.fillStyle = '#94a3b8';
+            const now = new Date();
+            const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+            eCtx.fillText(`PROJECT: ${safeProjectName}   |   EXPORT DATE: ${dateStr}   |   V2.2.4 ENTERPRISE`, logoXOffset, fy + 58);
+
+            // Authentication Watermark
+            eCtx.font = '600 10px "Inter", sans-serif';
+            eCtx.fillStyle = '#334155';
+            eCtx.fillText('SECURED BLUEPRINT EXPORT - VERIFIED ARCHITECTURAL CONTENT', 30, fy + 78);
+
+            // 6. Generate Project QR Code
+            const qrSize = 60;
+            const qrX = exportCanvas.width - qrSize - 30;
+            const qrY = fy + 12;
+            const qrLib = (typeof qrcode === 'function') ? qrcode : (typeof qrcode === 'object' ? qrcode.qrcode : null);
+
+            if (projectData && qrLib) {
+                try {
+                    const qrPayload = {
+                        app: "PROSARAL",
+                        v: "2.2.4",
+                        name: safeProjectName.slice(0, 20),
+                        objects: projectData.scene?.length || 0
+                    };
+                    const qr = qrLib(0, 'M');
+                    qr.addData(JSON.stringify(qrPayload));
+                    qr.make();
+                    const qrImg = new Image();
+                    await new Promise(r => { qrImg.onload = r; qrImg.onerror = r; qrImg.src = qr.createDataURL(4); });
+                    if (qrImg.complete && qrImg.naturalWidth > 0) {
+                        eCtx.fillStyle = 'white';
+                        eCtx.fillRect(qrX - 2, qrY - 2, qrSize + 4, qrSize + 4);
+                        eCtx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+                    }
+                } catch (qrErr) { console.warn("QR generation bypassed:", qrErr); }
+            }
+
+            const dataURL = exportCanvas.toDataURL('image/png');
+            this.render();
+            return dataURL;
+        } catch (err) {
+            console.error("Export process failed:", err);
+            return this.canvas.toDataURL('image/png'); // Fallback to raw canvas
         }
-        
-        const data = this.canvas.toDataURL('image/png');
-        this.render(); // Redraw once more to clean any "merged" widgets for screen view
-        return data;
     }
 }
