@@ -4,6 +4,96 @@ document.addEventListener('DOMContentLoaded', () => {
     const toolsManager = new ToolsManager(engine);
     const projectNameInput = document.getElementById('project-name');
 
+    // ==================== CLOUD SYNC & AUTH ====================
+    const authBtn = document.getElementById('menu-auth-btn');
+    const authBtnText = document.getElementById('auth-btn-text');
+    const cloudProjectsBtn = document.getElementById('menu-cloud-projects');
+
+    const syncStatusEl = document.getElementById('sync-status');
+
+    function updateAuthUI(user) {
+        if (user) {
+            authBtnText.innerText = `Sign Out (${user.email})`;
+            cloudProjectsBtn.style.opacity = '1';
+            cloudProjectsBtn.style.pointerEvents = 'all';
+            if (syncStatusEl) syncStatusEl.innerText = 'Connected';
+        } else {
+            authBtnText.innerText = 'Sign In';
+            cloudProjectsBtn.style.opacity = '0.5';
+            cloudProjectsBtn.style.pointerEvents = 'none';
+            if (syncStatusEl) syncStatusEl.innerText = 'Local Mode';
+        }
+    }
+
+    if (authBtn) {
+        authBtn.addEventListener('click', async () => {
+            if (RoomioAuth.isAuthenticated()) {
+                await RoomioAuth.signOut();
+            } else {
+                await RoomioAuth.signIn();
+            }
+        });
+    }
+
+    if (cloudProjectsBtn) {
+        cloudProjectsBtn.addEventListener('click', async () => {
+            if (!RoomioAuth.isAuthenticated()) return;
+            const projects = await RoomioApi.fetchProjects();
+            if (projects.length === 0) {
+                alert("No projects found in the cloud.");
+                return;
+            }
+            const names = projects.map((p, i) => `${i + 1}. ${p.projectName} (Last updated: ${new Date(p.updatedAt).toLocaleString()})`).join("\n");
+            const choice = prompt(`Select a project to load (1-${projects.length}):\n\n${names}`);
+            const idx = parseInt(choice) - 1;
+            if (projects[idx]) {
+                loadProjectFromJSON(projects[idx]);
+            }
+        });
+    }
+
+    const cloudSyncBtn = document.getElementById('menu-cloud-sync');
+    if (cloudSyncBtn) {
+        cloudSyncBtn.addEventListener('click', async () => {
+            if (!RoomioAuth.isAuthenticated()) {
+                alert("Please Sign In to sync your project to the cloud.");
+                return;
+            }
+            await syncToCloud();
+            alert("Project synced to cloud successfully!");
+        });
+    }
+
+    RoomioAuth.onAuthStateChange = (user) => {
+        updateAuthUI(user);
+    };
+    updateAuthUI(RoomioAuth.user);
+
+    async function syncToCloud() {
+        if (!RoomioAuth.isAuthenticated()) return;
+        if (syncStatusEl) syncStatusEl.innerText = 'Syncing...';
+        saveCurrentTab();
+        const designs = [];
+        for (const [id, data] of tabs) {
+            designs.push({ id, name: data.name, scene: data.scene });
+        }
+        const project = {
+            projectName: getProjectName(),
+            version: CURRENT_VERSION,
+            settings: {
+                theme: document.body.classList.contains('theme-light') ? 'light' : 'dark',
+                bgColor: engine.bgColor,
+                northAngle: engine.northAngle,
+                showGrid: engine.showGrid,
+                wallThickness: parseInt(document.getElementById('wall-thickness').value, 10) || 9
+            },
+            designs: designs
+        };
+        await RoomioApi.saveProject(project);
+        if (syncStatusEl) syncStatusEl.innerText = 'Last Sync: ' + new Date().toLocaleTimeString();
+        console.log("[Cloud] Project synced successfully.");
+    }
+
     // ==================== UNDO BUTTON ====================
     const undoBtn = document.getElementById('undo-btn');
     if (undoBtn) {

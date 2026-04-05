@@ -104,6 +104,22 @@
                 </div>
             </div>
 
+            <!-- Cloud Menu -->
+            <div class="menu-item">Cloud
+                <div class="dropdown-menu">
+                    <div class="dropdown-item" id="menu-cloud-projects">
+                        <span>My Projects</span><span class="menu-shortcut">Saved Designs</span>
+                    </div>
+                    <div class="dropdown-item" id="menu-cloud-sync">
+                        <span>Sync Current</span><span class="menu-shortcut">Cloud Save</span>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" id="menu-auth-btn">
+                        <span id="auth-btn-text">Sign In</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Help Menu -->
             <div class="menu-item">Help
                 <div class="dropdown-menu">
@@ -121,6 +137,7 @@
             </div>
 
             <div style="flex:1;"></div>
+            <div id="sync-status" style="font-size:10px; color:var(--text-muted); opacity:0.6; margin-right:16px; font-weight:500;">Local Mode</div>
             <div
                 style="padding-right:12px; font-weight:700; font-size:12px; color:var(--primary); letter-spacing:0.5px;">
                 DREAM HOME DESIGNER</div>
@@ -516,6 +533,8 @@
         <script src="branding-assets.js"></script>
         <script src="canvas-engine.js"></script>
         <script src="tools.js"></script>
+        <script src="auth.js"></script>
+        <script src="api-client.js"></script>
         <script src="app.js"></script>
         <script>
             lucide.createIcons();
