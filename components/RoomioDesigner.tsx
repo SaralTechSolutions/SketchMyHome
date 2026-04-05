@@ -69,26 +69,26 @@ export default function RoomioDesigner({ initialUser }: { initialUser: AppUser |
   };
 
   return (
-    <div className="main-wrapper">
+    <div className="main-wrapper bg-[#121214]">
       <div className="win-menu-bar">
-        <div className="menu-item-group flex items-center">
-          <div className="menu-item">File</div>
-          <div className="menu-item">Edit</div>
+        <div className="menu-item-group flex items-center gap-1">
+          <div className="menu-item py-1 px-3 hover:bg-white/5 cursor-default text-xs opacity-70">File</div>
+          <div className="menu-item py-1 px-3 hover:bg-white/5 cursor-default text-xs opacity-70">Edit</div>
           {user?.role === 'admin' && (
-            <div className="menu-item text-primary font-bold" onClick={() => setShowAdminModal(true)}>
+            <div className="menu-item py-1 px-3 hover:bg-white/5 cursor-pointer text-xs text-primary font-bold" onClick={() => setShowAdminModal(true)}>
               Admin Space
             </div>
           )}
         </div>
 
-        <div className="ml-auto flex items-center px-4" style={{ marginLeft: 'auto' }}>
+        <div className="flex items-center gap-4 px-3">
           {user ? (
-            <button onClick={handleLogout} className="flex items-center gap-2 text-xs opacity-80 hover:opacity-100">
-              <User size={14} /> {user.email} ({user.role})
+            <button onClick={handleLogout} className="flex items-center gap-2 text-[10px] opacity-60 hover:opacity-100 transition-opacity">
+              <User size={12} /> {user.email}
             </button>
           ) : (
-            <button onClick={handleLogin} className="flex items-center gap-2 text-xs opacity-80 hover:opacity-100">
-              <LogIn size={14} /> Sign In
+            <button onClick={handleLogin} className="flex items-center gap-2 text-[10px] opacity-60 hover:opacity-100 transition-opacity">
+              <LogIn size={12} /> Sign In
             </button>
           )}
         </div>
