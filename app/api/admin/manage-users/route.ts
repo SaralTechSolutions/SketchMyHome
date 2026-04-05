@@ -3,12 +3,18 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * app/api/admin/manage-users/route.ts
  * Refactored Admin API for Next.js App Router.
- * 
- * Logic ported from api/admin/manage-users.js
  */
 
+interface UserRegistryItem {
+  email: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 // Simulated Registry (In prod, move to Supabase profiles table)
-let userRegistry = [
+let userRegistry: UserRegistryItem[] = [
   { email: 'admin@example.com', role: 'admin', status: 'active', createdAt: new Date().toISOString() },
   { email: 'user@example.com', role: 'user', status: 'active', createdAt: new Date().toISOString() }
 ];
