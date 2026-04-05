@@ -14,29 +14,32 @@ export default function RoomioDesigner({ initialUser }: { initialUser: any }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
   const [user, setUser] = useState(initialUser);
-  const [selectedItems, setSelectedItems] = useState<any[]>([]);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
   const supabase = createClient();
 
   useEffect(() => {
-    if (canvasRef.current && !engineRef.current) {
-      const engine = new CanvasEngine(canvasRef.current);
-      engine.onSelectionChange = (items) => setSelectedItems([...items]);
-      engineRef.current = engine;
-      
-      const handleResize = () => engine.resize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
+    if (user?.role === 'admin' && showAdminModal) {
+       fetchAdminData();
     }
-  }, []);
+  }, [showAdminModal, user]);
+
+  const fetchAdminData = async () => {
+     try {
+       const res = await fetch('/api/admin/manage-users');
+       const data = await res.json();
+       setAdminUsers(data);
+     } catch (e) { console.error(e); }
+  };
 
   const handleLogin = async () => {
-    const email = prompt("Email (Supabase Mock):", "user@example.com");
+    const email = prompt("Email (Supabase Mock):", "admin@example.com");
     if (!email) return;
     const { data } = await supabase.auth.signInWithPassword({
         email,
         password: 'password'
     });
-    if (data.user) setUser(data.user);
+    if (data.user) setUser({ ...data.user, role: data.user.email?.includes('admin') ? 'admin' : 'user' });
   };
 
   const handleLogout = async () => {
@@ -47,12 +50,20 @@ export default function RoomioDesigner({ initialUser }: { initialUser: any }) {
   return (
     <div className="main-wrapper">
       <div className="win-menu-bar">
-        <div className="menu-item">File</div>
-        <div className="menu-item">Edit</div>
+        <div className="menu-item-group flex items-center">
+          <div className="menu-item">File</div>
+          <div className="menu-item">Edit</div>
+          {user?.role === 'admin' && (
+            <div className="menu-item text-primary font-bold" onClick={() => setShowAdminModal(true)}>
+              Admin Space
+            </div>
+          )}
+        </div>
+
         <div className="ml-auto flex items-center px-4" style={{ marginLeft: 'auto' }}>
           {user ? (
             <button onClick={handleLogout} className="flex items-center gap-2 text-xs opacity-80 hover:opacity-100">
-              <User size={14} /> {user.email}
+              <User size={14} /> {user.email} ({user.role})
             </button>
           ) : (
             <button onClick={handleLogin} className="flex items-center gap-2 text-xs opacity-80 hover:opacity-100">
@@ -63,6 +74,55 @@ export default function RoomioDesigner({ initialUser }: { initialUser: any }) {
       </div>
 
       <div className="app-container">
+        {/* Admin Modal Overlay */}
+        {showAdminModal && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+             <div className="bg-[#1e1e22] border border-white/10 rounded-xl w-full max-w-4xl max-h-[80vh] overflow-hidden shadow-2xl flex flex-col">
+                <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    <User size={20} className="text-primary" /> Admin Space Management
+                  </h2>
+                  <button onClick={() => setShowAdminModal(false)} className="opacity-50 hover:opacity-100 text-2xl">&times;</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6">
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                      <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                        <span className="text-[10px] uppercase tracking-widest opacity-50">Total Users</span>
+                        <div className="text-2xl font-bold text-primary">{adminUsers.length || '--'}</div>
+                      </div>
+                      <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                        <span className="text-[10px] uppercase tracking-widest opacity-50">System Status</span>
+                        <div className="text-2xl font-bold text-blue-400">Stable</div>
+                      </div>
+                   </div>
+
+                   <table className="w-full text-left">
+                      <thead className="text-[10px] uppercase tracking-widest opacity-50 border-b border-white/10">
+                        <tr>
+                          <th className="pb-4">User Email</th>
+                          <th className="pb-4">Role</th>
+                          <th className="pb-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm">
+                        {adminUsers.map((u) => (
+                           <tr key={u.email} className="border-b border-white/5">
+                              <td className="py-4">{u.email}</td>
+                              <td className="py-4 font-bold text-primary">{u.role}</td>
+                              <td className="py-4">
+                                 <button className="text-xs bg-white/5 px-2 py-1 rounded">Update</button>
+                              </td>
+                           </tr>
+                        ))}
+                      </tbody>
+                   </table>
+                </div>
+                <div className="p-4 border-t border-white/10 flex justify-end">
+                   <button onClick={() => setShowAdminModal(false)} className="px-4 py-2 bg-white/5 rounded text-sm">Close Panel</button>
+                </div>
+             </div>
+          </div>
+        )}
         <div className="toolbar">
           <div className="brand">
             <h1>Roomio</h1>
