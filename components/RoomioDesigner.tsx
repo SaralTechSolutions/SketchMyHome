@@ -33,6 +33,24 @@ export default function RoomioDesigner({ initialUser }: { initialUser: AppUser |
   const supabase = createClient();
 
   useEffect(() => {
+    if (canvasRef.current && !engineRef.current) {
+      engineRef.current = new CanvasEngine(canvasRef.current);
+    }
+
+    const handleResize = () => {
+      if (engineRef.current) engineRef.current.resize();
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Initial resize to ensure the canvas fills the container correctly on mount
+    setTimeout(handleResize, 100);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
     if (user?.role === 'admin' && showAdminModal) {
        fetchAdminData();
     }
@@ -83,12 +101,12 @@ export default function RoomioDesigner({ initialUser }: { initialUser: AppUser |
 
         <div className="flex items-center gap-4 px-3">
           {user ? (
-            <button onClick={handleLogout} className="flex items-center gap-2 text-[10px] opacity-60 hover:opacity-100 transition-opacity">
-              <User size={12} /> {user.email}
+            <button onClick={handleLogout} className="flex items-center gap-2 text-xs opacity-70 hover:opacity-100 transition-opacity">
+              <User size={14} /> {user.email}
             </button>
           ) : (
-            <button onClick={handleLogin} className="flex items-center gap-2 text-[10px] opacity-60 hover:opacity-100 transition-opacity">
-              <LogIn size={12} /> Sign In
+            <button onClick={handleLogin} className="flex items-center gap-2 text-xs opacity-70 hover:opacity-100 transition-opacity">
+              <LogIn size={14} /> Sign In
             </button>
           )}
         </div>
