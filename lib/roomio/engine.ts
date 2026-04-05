@@ -79,7 +79,7 @@ export class CanvasEngine {
         this.render();
     }
 
-    updateContrastColors() {
+    updateContrastColors(): void {
         const bg = '#1e1e22';
         if (bg === this._lastBgColor) return;
         this._lastBgColor = bg;
@@ -91,13 +91,13 @@ export class CanvasEngine {
         this.baseText = '#f8fafc';
     }
 
-    resize() {
+    resize(): void {
         this.canvas.width = this.canvas.clientWidth;
         this.canvas.height = this.canvas.clientHeight;
         this.render();
     }
 
-    setupPanAndZoom() {
+    setupPanAndZoom(): void {
         this.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const rect = this.canvas.getBoundingClientRect();
@@ -128,7 +128,7 @@ export class CanvasEngine {
         });
     }
 
-    zoomAtPosition(x: number, y: number, newScale: number) {
+    zoomAtPosition(x: number, y: number, newScale: number): void {
         newScale = Math.max(0.1, Math.min(newScale, 5));
         this.offsetX = x - (x - this.offsetX) * (newScale / this.scale);
         this.offsetY = y - (y - this.offsetY) * (newScale / this.scale);
@@ -136,7 +136,7 @@ export class CanvasEngine {
         this.render();
     }
 
-    render(drawBackgroundAndGrid = true) {
+    render(drawBackgroundAndGrid = true): void {
         if (!this.ctx) return;
         this.ctx.save();
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -159,7 +159,7 @@ export class CanvasEngine {
         this.ctx.restore();
     }
 
-    private drawGrid() {
+    private drawGrid(): void {
         this.ctx.strokeStyle = this.gridColor;
         this.ctx.lineWidth = 1 / this.scale;
         this.ctx.beginPath();
@@ -179,7 +179,7 @@ export class CanvasEngine {
         this.ctx.stroke();
     }
 
-    private drawShape(shape: Shape, isInteractive: boolean) {
+    private drawShape(shape: Shape, _isInteractive: boolean): void {
         const isSelected = this.selectedItems.includes(shape);
         switch (shape.type) {
             case 'wall':

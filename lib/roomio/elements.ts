@@ -34,15 +34,19 @@ export const ElementRegistry = new ElementRegistryService();
 
 ElementRegistry.register({
     id: 'door', name: 'Door', icon: 'door-open', width: 75, height: 25,
-    draw(ctx, hw, hh, w, h) {
+    draw(ctx, hw, hh, w, h, _scale, _shape, _colors) {
+        ctx.save();
         ctx.beginPath(); ctx.moveTo(-hw, hh); ctx.lineTo(-hw, hh - w);
         ctx.arc(-hw, hh, w, -Math.PI / 2, 0, false); ctx.stroke();
+        ctx.restore();
     }
 });
 
 ElementRegistry.register({
     id: 'window', name: 'Window', icon: 'app-window', width: 100, height: 25,
-    draw(ctx, hw, hh, w, h) {
+    draw(ctx, hw, hh, w, h, _scale, _shape, _colors) {
+        ctx.save();
         ctx.fillRect(-hw, -hh, w, h); ctx.strokeRect(-hw, -hh, w, h);
+        ctx.restore();
     }
 });

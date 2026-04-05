@@ -10,12 +10,26 @@ import { CanvasEngine } from '@/lib/roomio/engine';
 import { createClient } from '@/utils/supabase/client';
 import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn } from 'lucide-react';
 
-export default function RoomioDesigner({ initialUser }: { initialUser: any }) {
+interface AppUser {
+  id: string;
+  email?: string;
+  role?: 'admin' | 'user';
+}
+
+interface UserRegistryItem {
+  email: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export default function RoomioDesigner({ initialUser }: { initialUser: AppUser | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
-  const [user, setUser] = useState(initialUser);
+  const [user, setUser] = useState<AppUser | null>(initialUser);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [adminUsers, setAdminUsers] = useState<UserRegistryItem[]>([]);
   const supabase = createClient();
 
   useEffect(() => {
@@ -24,25 +38,32 @@ export default function RoomioDesigner({ initialUser }: { initialUser: any }) {
     }
   }, [showAdminModal, user]);
 
-  const fetchAdminData = async () => {
+  const fetchAdminData = async (): Promise<void> => {
      try {
        const res = await fetch('/api/admin/manage-users');
-       const data = await res.json();
+       const data: UserRegistryItem[] = await res.json();
        setAdminUsers(data);
      } catch (e) { console.error(e); }
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (): Promise<void> => {
     const email = prompt("Email (Supabase Mock):", "admin@example.com");
     if (!email) return;
     const { data } = await supabase.auth.signInWithPassword({
         email,
         password: 'password'
     });
-    if (data.user) setUser({ ...data.user, role: data.user.email?.includes('admin') ? 'admin' : 'user' });
+    if (data.user) {
+      const newUser: AppUser = {
+        id: data.user.id,
+        email: data.user.email,
+        role: data.user.email?.includes('admin') ? 'admin' : 'user'
+      };
+      setUser(newUser);
+    }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (): Promise<void> => {
     await supabase.auth.signOut();
     setUser(null);
   };

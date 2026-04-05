@@ -45,11 +45,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
         success: true, 
         message: 'Project synced to cloud',
-        project_id 
+        project_id,
+        timestamp: new Date().toISOString()
     });
 
   } catch (error: any) {
-    console.error('Cloud Save Error:', error);
-    return NextResponse.json({ error: 'Failed to save project', details: error.message }, { status: 500 });
+    console.error('[CloudSave] Critical Exception:', error);
+    return NextResponse.json({ 
+        error: 'Failed to save project', 
+        details: error.message,
+        code: error.code || 'UNKNOWN_ERROR'
+    }, { status: 500 });
   }
 }
