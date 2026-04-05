@@ -90,10 +90,10 @@ export default function RoomioDesigner({ initialUser }: { initialUser: AppUser |
     <div className="main-wrapper bg-[#121214]">
       <div className="win-menu-bar">
         <div className="menu-item-group flex items-center gap-1">
-          <div className="menu-item py-1 px-3 hover:bg-white/5 cursor-default text-xs opacity-70">File</div>
-          <div className="menu-item py-1 px-3 hover:bg-white/5 cursor-default text-xs opacity-70">Edit</div>
+          <div className="menu-item py-1 px-3">File</div>
+          <div className="menu-item py-1 px-3">Edit</div>
           {user?.role === 'admin' && (
-            <div className="menu-item py-1 px-3 hover:bg-white/5 cursor-pointer text-xs text-primary font-bold" onClick={() => setShowAdminModal(true)}>
+            <div className="menu-item py-1 px-3 text-primary font-bold cursor-pointer" onClick={() => setShowAdminModal(true)}>
               Admin Space
             </div>
           )}
@@ -167,11 +167,11 @@ export default function RoomioDesigner({ initialUser }: { initialUser: AppUser |
             <h1>Roomio</h1>
           </div>
           <div className="tools-group">
-            <button className="tool-btn active"><Layout size={18} /> <span>Room</span></button>
-            <button className="tool-btn"><Hammer size={18} /> <span>Wall</span></button>
-            <button className="tool-btn"><Square size={18} /> <span>Object</span></button>
+            <button className="tool-btn active"><Layout size={20} /> <span>Room</span></button>
+            <button className="tool-btn"><Hammer size={20} /> <span>Wall</span></button>
+            <button className="tool-btn"><Square size={20} /> <span>Object</span></button>
           </div>
-          <div className="tools-group bottom" style={{ marginTop: 'auto' }}>
+          <div className="tools-group bottom">
             <button className="action-btn primary"><Save size={18} /> <span>Save</span></button>
           </div>
         </div>
