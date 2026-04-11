@@ -1572,12 +1572,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 editAltitudeVal.innerText = `${editWallAltitudeInput.value}ft`;
                 rotateContainer.style.display = 'none';
             } else {
-                infoDiv.innerHTML = `<strong>${items.length} Items Selected</strong>`;
+                const allObjects = items.every(i => i.type === 'object');
+                const sameSubType = allObjects && items.every(i => i.subType === items[0].subType);
+                
+                if (sameSubType) {
+                    const tName = items[0].subType.charAt(0).toUpperCase() + items[0].subType.slice(1);
+                    infoDiv.innerHTML = `<strong>${items.length} ${tName}s Selected</strong>`;
+                } else {
+                    infoDiv.innerHTML = `<strong>${items.length} Items Selected</strong>`;
+                }
+
                 if (editLengthContainer) editLengthContainer.style.display = 'none';
                 editThicknessContainer.style.display = 'none';
                 if (editLineTypeContainer) editLineTypeContainer.style.display = 'none';
                 editAltitudeContainer.style.display = 'none';
-                rotateContainer.style.display = 'none';
+                rotateContainer.style.display = sameSubType ? 'block' : 'none';
             }
         } else {
             infoDiv.innerText = 'No item selected.';

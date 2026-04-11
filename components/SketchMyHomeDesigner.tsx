@@ -343,24 +343,26 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                    </span>
                 </div>
                 <div className="p-4 flex flex-col gap-6">
-                    {selectedItems.length === 1 && selectedItems[0].type === 'wall' && (
+                   {selectedItems.length > 0 && selectedItems.every(i => i.type === 'wall') && (
                      <div className="flex flex-col gap-3">
                         <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Wall Geometry</label>
                         <div className="flex flex-col gap-2">
-                           <div className="flex justify-between items-center text-xs">
-                              <span className="opacity-70">Length (ft)</span>
-                              <div className="flex items-center gap-1">
-                                <input 
-                                  type="number" 
-                                  step="0.1"
-                                  min="0.1"
-                                  value={(Math.hypot(selectedItems[0].endX - selectedItems[0].startX, selectedItems[0].endY - selectedItems[0].startY) / (engineRef.current?.gridSize || 20)).toFixed(1)}
-                                  className="w-16 bg-black/5 border border-black/10 rounded px-1.5 py-1 font-mono text-primary font-bold text-right"
-                                  onChange={(e) => handleLengthChange(parseFloat(e.target.value))}
-                                />
-                                <span className="opacity-40">ft</span>
-                              </div>
-                           </div>
+                           {selectedItems.length === 1 && (
+                             <div className="flex justify-between items-center text-xs">
+                                <span className="opacity-70">Length (ft)</span>
+                                <div className="flex items-center gap-1">
+                                  <input 
+                                    type="number" 
+                                    step="0.1"
+                                    min="0.1"
+                                    value={(Math.hypot(selectedItems[0].endX - selectedItems[0].startX, selectedItems[0].endY - selectedItems[0].startY) / (engineRef.current?.gridSize || 20)).toFixed(1)}
+                                    className="w-16 bg-black/5 border border-black/10 rounded px-1.5 py-1 font-mono text-primary font-bold text-right"
+                                    onChange={(e) => handleLengthChange(parseFloat(e.target.value))}
+                                  />
+                                  <span className="opacity-40">ft</span>
+                                </div>
+                             </div>
+                           )}
                            <div className="flex justify-between items-center text-xs pt-2">
                               <span className="opacity-70">Thickness</span>
                               <span className="font-mono text-primary font-bold">{getInchesFromPx(selectedItems[0].thickness || 9 * (engineRef.current?.gridSize || 20) / 12)}"</span>
@@ -377,7 +379,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                      </div>
                    )}
 
-                   {selectedItems.length === 1 && selectedItems[0].type === 'wall' && (
+                   {selectedItems.length > 0 && selectedItems.every(i => i.type === 'wall') && (
                      <div className="flex flex-col gap-3 pt-4 border-t border-black/5">
                         <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Visual Style</label>
                         <select 
@@ -391,7 +393,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                      </div>
                    )}
 
-                   {selectedItems.length === 1 && selectedItems[0].type === 'wall' && (
+                   {selectedItems.length > 0 && selectedItems.every(i => i.type === 'wall') && (
                      <div className="flex flex-col gap-3 pt-4 border-t border-black/5">
                         <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Wall Altitude (Height)</label>
                         <div className="flex flex-col gap-2">
@@ -412,24 +414,26 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                      </div>
                    )}
 
-                   {selectedItems.length === 1 && selectedItems[0].type === 'object' && (
+                   {selectedItems.length > 0 && selectedItems.every(i => i.type === 'object') && (
                      <div className="text-xs space-y-2">
                         <div className="flex justify-between border-b border-black/5 pb-2">
                            <span className="opacity-50">Type</span>
                            <span className="font-bold uppercase tracking-tight">{selectedItems[0].subType}</span>
                         </div>
-                        <div className="flex justify-between">
-                           <span className="opacity-50">Dimensions</span>
-                           <span className="font-mono">{engineRef.current?.pixelsToFeet(selectedItems[0].width)} x {engineRef.current?.pixelsToFeet(selectedItems[0].height)}</span>
-                        </div>
+                        {selectedItems.length === 1 && (
+                          <div className="flex justify-between">
+                             <span className="opacity-50">Dimensions</span>
+                             <span className="font-mono">{engineRef.current?.pixelsToFeet(selectedItems[0].width)} x {engineRef.current?.pixelsToFeet(selectedItems[0].height)}</span>
+                          </div>
+                        )}
                      </div>
                    )}
 
-                   {selectedItems.length > 1 && (
+                   {selectedItems.length > 1 && !selectedItems.every(i => i.type === selectedItems[0].type) && (
                      <div className="text-xs opacity-60 italic text-center py-4 bg-black/5 rounded-lg border border-dashed border-black/10">
-                        Multi-select tools coming soon...
+                        Mixed selection: Bulk editing restricted.
                      </div>
-                   )}
+                   )})}
 
                    <div className="pt-2 border-t border-black/5 flex gap-2">
                       <button 
