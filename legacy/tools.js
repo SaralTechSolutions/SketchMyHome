@@ -4,6 +4,7 @@ class ToolsManager {
         this.currentTool = null;
         this.state = {}; // to store temporary drawing state
         this.isSpaceDown = false;
+        this.isShiftDown = false;  // tracks Shift key for ortho-lock
         this.clipboard = [];
         
         // Bind events
@@ -390,8 +391,32 @@ class ToolsManager {
         else if ((this.currentTool === 'wall' || this.currentTool === 'measure') && this.state.isDrawing) {
             const snap = this.getSnapPoint(x, y);
             const aligns = this.getAxisAlignments(x, y);
-            this.state.endX = snap ? snap.x : (aligns.x !== null ? aligns.x : x);
-            this.state.endY = snap ? snap.y : (aligns.y !== null ? aligns.y : y);
+            let rawX = snap ? snap.x : (aligns.x !== null ? aligns.x : x);
+            let rawY = snap ? snap.y : (aligns.y !== null ? aligns.y : y);
+
+            // --- Ortho / Axis-Alignment Constraint ---
+            const dx = rawX - this.state.startX;
+            const dy = rawY - this.state.startY;
+            const angle = Math.abs(Math.atan2(dy, dx) * 180 / Math.PI);
+
+            const forceOrtho = this.isShiftDown;
+            const nearHoriz = angle < 15 || angle > 165;
+            const nearVert  = (angle > 75 && angle < 105);
+            const autoSnap  = !forceOrtho && (nearHoriz || nearVert);
+
+            if (forceOrtho || autoSnap) {
+                if (forceOrtho ? Math.abs(dx) > Math.abs(dy) : nearHoriz) {
+                    rawY = this.state.startY;  // Lock horizontal
+                } else {
+                    rawX = this.state.startX;  // Lock vertical
+                }
+            }
+            this.state.orthoAxis = (forceOrtho || autoSnap)
+                ? ((rawY === this.state.startY) ? 'H' : 'V')
+                : null;
+
+            this.state.endX = rawX;
+            this.state.endY = rawY;
             this.engine.render();
         }
         else if (this.currentTool === 'room' && this.state.isDrawing) {
