@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // @ts-ignore
 import { CanvasEngine } from '@/lib/sketch-my-home/engine';
 import { createClient } from '@/utils/supabase/client';
-import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand } from 'lucide-react';
+import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand, DoorOpen, AppWindow, AlignJustify, Bed, Circle, Library, Bath, Droplets, Armchair, Type, Maximize2, Minus, Plus, Maximize } from 'lucide-react';
 // @ts-ignore
 import { ToolsManager } from '@/lib/sketch-my-home/tools';
 
@@ -177,33 +177,87 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
              </div>
           </div>
         )}
-        <div className="toolbar">
-          <div className="brand">
+        <div className="w-[240px] flex-shrink-0 border-r border-white/10 bg-[#1e1e22] relative flex flex-col pt-6 h-full pb-0 z-20">
+          <div className="brand px-4">
             <h1>sketch my home</h1>
           </div>
-          <div className="tools-group">
+          <div className="tools-group h-full overflow-y-auto no-scrollbar pb-24">
+            <h3 className="text-xs uppercase text-white/50 mb-2 px-2 tracking-widest font-bold">Tools</h3>
             <button className={`tool-btn ${activeTool === 'select' ? 'active' : ''}`} onClick={() => handleToolClick('select')}>
               <MousePointer size={20} /> <span>Select</span>
             </button>
             <button className={`tool-btn ${activeTool === 'pan' ? 'active' : ''}`} onClick={() => handleToolClick('pan')}>
               <Hand size={20} /> <span>Pan</span>
             </button>
-            <button className={`tool-btn ${activeTool === 'room' ? 'active' : ''}`} onClick={() => handleToolClick('room')}>
-              <Layout size={20} /> <span>Room</span>
-            </button>
             <button className={`tool-btn ${activeTool === 'wall' ? 'active' : ''}`} onClick={() => handleToolClick('wall')}>
               <Hammer size={20} /> <span>Wall</span>
             </button>
-            <button className={`tool-btn ${activeTool === 'object' ? 'active' : ''}`} onClick={() => handleToolClick('object')}>
-              <Square size={20} /> <span>Object</span>
+            <button className={`tool-btn ${activeTool === 'room' ? 'active' : ''}`} onClick={() => handleToolClick('room')}>
+              <Layout size={20} /> <span>Room</span>
             </button>
+            <button className={`tool-btn ${activeTool === 'measure_area' ? 'active' : ''}`} onClick={() => handleToolClick('measure_area')}>
+              <Maximize2 size={20} /> <span>Area</span>
+            </button>
+
+            <h3 className="text-xs uppercase text-white/50 mt-4 mb-2 px-2 tracking-widest font-bold border-t border-white/10 pt-4">Elements</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'door' ? 'active' : ''}`} onClick={() => handleToolClick('door')}>
+                <DoorOpen size={16} /> <span className="text-[9px]">Door</span>
+              </button>
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'window' ? 'active' : ''}`} onClick={() => handleToolClick('window')}>
+                <AppWindow size={16} /> <span className="text-[9px]">Window</span>
+              </button>
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'stairs' ? 'active' : ''}`} onClick={() => handleToolClick('stairs')}>
+                <AlignJustify size={16} /> <span className="text-[9px]">Stairs</span>
+              </button>
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'bed' ? 'active' : ''}`} onClick={() => handleToolClick('bed')}>
+                <Bed size={16} /> <span className="text-[9px]">Bed</span>
+              </button>
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'table' ? 'active' : ''}`} onClick={() => handleToolClick('table')}>
+                <Circle size={16} /> <span className="text-[9px]">Table</span>
+              </button>
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'bookshelf' ? 'active' : ''}`} onClick={() => handleToolClick('bookshelf')}>
+                <Library size={16} /> <span className="text-[9px]">Bookshelf</span>
+              </button>
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'commode' ? 'active' : ''}`} onClick={() => handleToolClick('commode')}>
+                <Bath size={16} /> <span className="text-[9px]">Commode</span>
+              </button>
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'washing_machine' ? 'active' : ''}`} onClick={() => handleToolClick('washing_machine')}>
+                <Droplets size={16} /> <span className="text-[9px]">Washer</span>
+              </button>
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'chair' ? 'active' : ''}`} onClick={() => handleToolClick('chair')}>
+                <Armchair size={16} /> <span className="text-[9px]">Chair</span>
+              </button>
+              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'text' ? 'active' : ''}`} onClick={() => handleToolClick('text')}>
+                <Type size={16} /> <span className="text-[9px]">Text</span>
+              </button>
+            </div>
           </div>
-          <div className="tools-group bottom">
-            <button className="action-btn primary"><Save size={18} /> <span>Save</span></button>
+          <div className="absolute bottom-0 left-0 w-full p-4 bg-[#1e1e22] border-t border-white/10 flex flex-col gap-2 z-10 w-[240px]">
+             <div className="flex gap-2 w-full">
+                <button className="action-btn flex-1 bg-white/5 opacity-80 hover:opacity-100 !h-10" onClick={() => toolsRef.current?.setTool('delete')}>
+                   <Trash2 size={16} />
+                </button>
+                <button className="action-btn flex-1 bg-white/5 opacity-80 hover:opacity-100 !h-10" onClick={() => engineRef.current?.undo()}>
+                   <Undo size={16} />
+                </button>
+             </div>
+             <button className="action-btn primary w-full !h-10"><Save size={16} /> <span>Save</span></button>
           </div>
         </div>
-        <div className="canvas-container">
+        <div className="canvas-container relative">
            <canvas ref={canvasRef} />
+           <div className="absolute bottom-6 right-6 flex items-center gap-1 bg-[#1e1e22]/90 p-1.5 rounded-lg border border-white/10 z-10 backdrop-blur-sm">
+             <button className="p-2 hover:bg-white/10 rounded text-white/70 hover:text-white transition-colors" onClick={() => engineRef.current && (engineRef.current.scale = Math.max(0.1, engineRef.current.scale - 0.1), engineRef.current.render())} title="Zoom Out">
+                <Minus size={16} />
+             </button>
+             <button className="p-2 hover:bg-white/10 rounded text-white/70 hover:text-white transition-colors text-xs font-bold w-12 text-center" onClick={() => engineRef.current && (engineRef.current.scale = 1, engineRef.current.offsetX = 0, engineRef.current.offsetY = 0, engineRef.current.render())} title="Reset Zoom">
+                100%
+             </button>
+             <button className="p-2 hover:bg-white/10 rounded text-white/70 hover:text-white transition-colors" onClick={() => engineRef.current && (engineRef.current.scale = Math.min(5, engineRef.current.scale + 0.1), engineRef.current.render())} title="Zoom In">
+                <Plus size={16} />
+             </button>
+           </div>
         </div>
       </div>
     </div>
