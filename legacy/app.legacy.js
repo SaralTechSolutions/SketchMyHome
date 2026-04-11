@@ -1083,6 +1083,11 @@ document.addEventListener('DOMContentLoaded', () => {
     backdrop?.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
 
     document.addEventListener('keydown', (e) => {
+        // --- Fix 2: Keyboard Shortcuts Fire in Input Fields ---
+        const isInputField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || 
+                            e.target.contentEditable === 'true';
+        if (isInputField) return;
+
         if (e.key === 'Escape' && !backdrop.classList.contains('hidden')) closeModal();
         if (e.key === 'F1') { e.preventDefault(); openModal('shortcuts'); }
     });
