@@ -521,6 +521,7 @@ canvas.tool-pan:active {
     overflow-y: auto;
     pointer-events: auto;
     transition: opacity 0.3s ease;
+    z-index: 1000;
 }
 
 .properties-panel.hidden {
