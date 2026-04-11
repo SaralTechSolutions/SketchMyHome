@@ -36,6 +36,15 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminUsers, setAdminUsers] = useState<UserRegistryItem[]>([]);
+  
+  // Auth Form State
+  const [showAuthModal, setShowAuthModal] = useState(true); // Always true on landing per request
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authCoupon, setAuthCoupon] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -162,21 +171,52 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
     return Math.round(px / (engineRef.current.gridSize / 12));
   };
 
-  const handleLogin = async (): Promise<void> => {
-    const email = prompt("Email (Supabase Mock):", "admin@example.com");
-    if (!email) return;
-    const { data } = await supabase.auth.signInWithPassword({
-      email,
-      password: 'password'
-    });
-    if (data.user) {
-      const newUser: AppUser = {
-        id: data.user.id,
-        email: data.user.email,
-        role: data.user.email?.includes('admin') ? 'admin' : 'user'
-      };
-      setUser(newUser);
+  const handleLoginSubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    setAuthError('');
+    setIsAuthLoading(true);
+
+    try {
+      // 1. Coupon Evaluation Encrypted Check
+      // 'ZHJlYW1ob21lQDIwMjY=' is btoa('dreamhome@2026')
+      const encryptedCoupon = btoa(authCoupon);
+      if (encryptedCoupon !== 'ZHJlYW1ob21lQDIwMjY=') {
+        setAuthError('Invalid coupon code.');
+        setIsAuthLoading(false);
+        return;
+      }
+
+      // 2. Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: authPassword
+      });
+
+      if (error) {
+        setAuthError(error.message || 'Invalid email or password.');
+        setIsAuthLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        const newUser: AppUser = {
+          id: data.user.id,
+          email: data.user.email,
+          role: data.user.email?.includes('admin') ? 'admin' : 'user'
+        };
+        setUser(newUser);
+        setShowAuthModal(false);
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication failed.');
+    } finally {
+      setIsAuthLoading(false);
     }
+  };
+
+  const openAuthModal = () => {
+    setAuthError('');
+    setShowAuthModal(true);
   };
 
   const handleLogout = async (): Promise<void> => {
@@ -200,10 +240,10 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
         <div className="flex items-center gap-4 px-3">
           {user ? (
             <button onClick={handleLogout} className="flex items-center gap-2 text-xs opacity-70 hover:opacity-100 transition-opacity">
-              <User size={14} /> {user.email}
+              <User size={14} /> {user.email} (Sign Out)
             </button>
           ) : (
-            <button onClick={handleLogin} className="flex items-center gap-2 text-xs opacity-70 hover:opacity-100 transition-opacity">
+            <button onClick={openAuthModal} className="flex items-center gap-2 text-xs opacity-70 hover:opacity-100 transition-opacity">
               <LogIn size={14} /> Sign In
             </button>
           )}
@@ -211,6 +251,44 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       </div>
 
       <div className="app-container">
+        {/* Auth Modal Overlay */}
+        {showAuthModal && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+            <div className="bg-[#1e1e22] border border-white/10 rounded-xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col text-white">
+              <div className="p-8 pb-6 flex flex-col items-center">
+                <h2 className="text-2xl font-bold mb-2 text-primary">Welcome Back</h2>
+                <p className="text-sm text-white/50 text-center">Continue your architectural journey</p>
+              </div>
+              <div className="p-8 pt-0">
+                <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-white/50">Email Address</label>
+                    <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required placeholder="name@company.com" className="w-full p-3 bg-white/5 border border-white/10 rounded-lg text-white outline-none focus:border-primary transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-white/50">Password</label>
+                    <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required placeholder="••••••••" className="w-full p-3 bg-white/5 border border-white/10 rounded-lg text-white outline-none focus:border-primary transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-white/50">Coupon Code</label>
+                    <input type="text" value={authCoupon} onChange={e => setAuthCoupon(e.target.value)} required placeholder="Enter valid coupon code" className="w-full p-3 bg-white/5 border border-white/10 rounded-lg text-white outline-none focus:border-primary transition-colors" />
+                  </div>
+                  
+                  {authError && (
+                    <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/50 text-red-400 text-xs text-center">
+                      {authError}
+                    </div>
+                  )}
+
+                  <button type="submit" disabled={isAuthLoading} className="w-full mt-2 p-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg transition-colors flex justify-center disabled:opacity-50">
+                    {isAuthLoading ? 'Authenticating...' : 'Sign In'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Admin Modal Overlay */}
         {showAdminModal && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
