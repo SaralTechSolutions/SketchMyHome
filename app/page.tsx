@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server';
 import { cookies } from 'next/headers';
-import RoomioDesigner from '@/components/RoomioDesigner';
+import SketchMyHomeDesigner from '@/components/SketchMyHomeDesigner';
 
 export default async function Page() {
   const cookieStore = await cookies();
@@ -12,7 +12,7 @@ export default async function Page() {
 
   return (
     <main className="app-container">
-      <RoomioDesigner initialUser={user} />
+      <SketchMyHomeDesigner initialUser={user} />
       
       {/* Sample Todos display from original request */}
       {todos && todos.length > 0 && (
