@@ -12,10 +12,13 @@ const Auth = {
         }
         this._setupListeners();
 
-        // Auto-launch sign-in if not authenticated
-        if (!this.user) {
-            setTimeout(() => this.signIn(), 500); // Slight delay for smoother entrance
+        // Always show sign-in popup on landing, ignoring restoring user sessions immediately
+        // unless they successfully re-auth with coupon
+        if (this.user) {
+            // we have a user but we still want to land with the signin popup 
+            // as requested "always make sure to land with signin popup screen"
         }
+        setTimeout(() => this.signIn(), 500); // Slight delay for smoother entrance
     },
 
     _setupListeners() {
@@ -96,6 +99,7 @@ const Auth = {
         const email = document.getElementById('auth-email').value;
         const password = document.getElementById('auth-password').value;
         const remember = document.getElementById('auth-remember').checked;
+        const coupon = document.getElementById('auth-coupon').value;
         const submitBtn = document.getElementById('auth-submit-btn');
         const spinner = document.getElementById('auth-spinner');
         const text = document.getElementById('auth-submit-text');
@@ -115,6 +119,20 @@ const Auth = {
         if (email.length < 5 || password.length < 4) {
             if (errorDiv) {
                 errorDiv.innerText = "Please enter a valid email and a stronger password.";
+                errorDiv.classList.remove('hidden');
+            }
+            submitBtn.disabled = false;
+            spinner.classList.add('hidden');
+            text.style.opacity = '1';
+            return;
+        }
+
+        // Encrypted coupon code evaluation
+        // 'ZHJlYW1ob21lQDIwMjY=' is btoa('dreamhome@2026')
+        const encryptedCoupon = btoa(coupon);
+        if (encryptedCoupon !== 'ZHJlYW1ob21lQDIwMjY=') {
+            if (errorDiv) {
+                errorDiv.innerText = "Invalid coupon code.";
                 errorDiv.classList.remove('hidden');
             }
             submitBtn.disabled = false;
