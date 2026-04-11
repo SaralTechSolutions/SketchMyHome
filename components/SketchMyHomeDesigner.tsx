@@ -6,9 +6,12 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+// @ts-ignore
 import { CanvasEngine } from '@/lib/sketch-my-home/engine';
 import { createClient } from '@/utils/supabase/client';
-import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn } from 'lucide-react';
+import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand } from 'lucide-react';
+// @ts-ignore
+import { ToolsManager } from '@/lib/sketch-my-home/tools';
 
 interface AppUser {
   id: string;
@@ -27,6 +30,8 @@ interface UserRegistryItem {
 export default function SketchMyHomeDesigner({ initialUser }: { initialUser: AppUser | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
+  const toolsRef = useRef<ToolsManager | null>(null);
+  const [activeTool, setActiveTool] = useState<string>('select');
   const [user, setUser] = useState<AppUser | null>(initialUser);
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -36,6 +41,8 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   useEffect(() => {
     if (canvasRef.current && !engineRef.current) {
       engineRef.current = new CanvasEngine(canvasRef.current);
+      toolsRef.current = new ToolsManager(engineRef.current);
+      toolsRef.current.setTool('select');
     }
 
     const handleResize = () => {
@@ -56,6 +63,13 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
        fetchAdminData();
     }
   }, [showAdminModal, user]);
+
+  const handleToolClick = (toolTarget: string) => {
+      setActiveTool(toolTarget);
+      if (toolsRef.current) {
+         toolsRef.current.setTool(toolTarget);
+      }
+  };
 
   const fetchAdminData = async (): Promise<void> => {
      try {
@@ -168,9 +182,21 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
             <h1>sketch my home</h1>
           </div>
           <div className="tools-group">
-            <button className="tool-btn active"><Layout size={20} /> <span>Room</span></button>
-            <button className="tool-btn"><Hammer size={20} /> <span>Wall</span></button>
-            <button className="tool-btn"><Square size={20} /> <span>Object</span></button>
+            <button className={`tool-btn ${activeTool === 'select' ? 'active' : ''}`} onClick={() => handleToolClick('select')}>
+              <MousePointer size={20} /> <span>Select</span>
+            </button>
+            <button className={`tool-btn ${activeTool === 'pan' ? 'active' : ''}`} onClick={() => handleToolClick('pan')}>
+              <Hand size={20} /> <span>Pan</span>
+            </button>
+            <button className={`tool-btn ${activeTool === 'room' ? 'active' : ''}`} onClick={() => handleToolClick('room')}>
+              <Layout size={20} /> <span>Room</span>
+            </button>
+            <button className={`tool-btn ${activeTool === 'wall' ? 'active' : ''}`} onClick={() => handleToolClick('wall')}>
+              <Hammer size={20} /> <span>Wall</span>
+            </button>
+            <button className={`tool-btn ${activeTool === 'object' ? 'active' : ''}`} onClick={() => handleToolClick('object')}>
+              <Square size={20} /> <span>Object</span>
+            </button>
           </div>
           <div className="tools-group bottom">
             <button className="action-btn primary"><Save size={18} /> <span>Save</span></button>
