@@ -140,6 +140,23 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
     setSelectedItems([...engineRef.current.selectedItems]);
   };
 
+  const handleLengthChange = (valFeet: number) => {
+    if (!engineRef.current || isNaN(valFeet)) return;
+    const item = engineRef.current.selectedItems[0];
+    if (!item || item.type !== 'wall') return;
+
+    const pxLen = valFeet * engineRef.current.gridSize;
+    const dx = item.endX - item.startX;
+    const dy = item.endY - item.startY;
+    const angle = Math.atan2(dy, dx);
+
+    item.endX = item.startX + Math.cos(angle) * pxLen;
+    item.endY = item.startY + Math.sin(angle) * pxLen;
+
+    engineRef.current.render();
+    setSelectedItems([...engineRef.current.selectedItems]);
+  };
+
   const getInchesFromPx = (px: number) => {
     if (!engineRef.current) return 9;
     return Math.round(px / (engineRef.current.gridSize / 12));
@@ -326,13 +343,27 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                    </span>
                 </div>
                 <div className="p-4 flex flex-col gap-6">
-                   {selectedItems.length === 1 && selectedItems[0].type === 'wall' && (
+                    {selectedItems.length === 1 && selectedItems[0].type === 'wall' && (
                      <div className="flex flex-col gap-3">
-                        <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Wall Thickness</label>
+                        <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Wall Geometry</label>
                         <div className="flex flex-col gap-2">
                            <div className="flex justify-between items-center text-xs">
+                              <span className="opacity-70">Length (ft)</span>
+                              <div className="flex items-center gap-1">
+                                <input 
+                                  type="number" 
+                                  step="0.1"
+                                  min="0.1"
+                                  value={(Math.hypot(selectedItems[0].endX - selectedItems[0].startX, selectedItems[0].endY - selectedItems[0].startY) / (engineRef.current?.gridSize || 20)).toFixed(1)}
+                                  className="w-16 bg-black/5 border border-black/10 rounded px-1.5 py-1 font-mono text-primary font-bold text-right"
+                                  onChange={(e) => handleLengthChange(parseFloat(e.target.value))}
+                                />
+                                <span className="opacity-40">ft</span>
+                              </div>
+                           </div>
+                           <div className="flex justify-between items-center text-xs pt-2">
+                              <span className="opacity-70">Thickness</span>
                               <span className="font-mono text-primary font-bold">{getInchesFromPx(selectedItems[0].thickness || 9 * (engineRef.current?.gridSize || 20) / 12)}"</span>
-                              <span className="opacity-40 tracking-tighter">1" — 36"</span>
                            </div>
                            <input 
                              type="range" 

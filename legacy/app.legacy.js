@@ -491,6 +491,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ==================== EDIT SLIDERS ====================
+    const editLengthContainer = document.getElementById('edit-length-container');
+    const editWallLengthInput = document.getElementById('edit-wall-length');
     const editThicknessContainer = document.getElementById('edit-thickness-container');
     const editWallThicknessInput = document.getElementById('edit-wall-thickness');
     const editThicknessVal = document.getElementById('edit-thickness-val');
@@ -499,6 +501,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const editWallAltitudeInput = document.getElementById('edit-wall-altitude');
     const editAltitudeVal = document.getElementById('edit-altitude-val');
     const editAltitudeContainer = document.getElementById('edit-altitude-container');
+
+    if (editWallLengthInput) {
+        editWallLengthInput.addEventListener('input', (e) => {
+            if (!engine.selectedItems.length || engine.selectedItems[0].type !== 'wall') return;
+            const valFeet = parseFloat(e.target.value);
+            if (isNaN(valFeet) || valFeet <= 0) return;
+
+            const item = engine.selectedItems[0];
+            const pxLen = valFeet * engine.gridSize;
+            const dx = item.endX - item.startX;
+            const dy = item.endY - item.startY;
+            const angle = Math.atan2(dy, dx);
+
+            item.endX = item.startX + Math.cos(angle) * pxLen;
+            item.endY = item.startY + Math.sin(angle) * pxLen;
+
+            engine.render();
+            updateJsonEditor();
+        });
+    }
 
     editWallThicknessInput.addEventListener('input', (e) => {
         const valInches = parseInt(e.target.value, 10);
@@ -1463,6 +1485,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const h = engine.pixelsToFeet(item.height);
                 const tName = item.type === 'object' ? (item.subType.charAt(0).toUpperCase() + item.subType.slice(1)) : 'Room';
                 infoDiv.innerHTML = `<strong>Selected ${tName}</strong><br/>Size: ${w} \u00d7 ${h}`;
+                if (editLengthContainer) editLengthContainer.style.display = 'none';
                 editThicknessContainer.style.display = 'none';
                 if (editLineTypeContainer) editLineTypeContainer.style.display = 'none';
                 editAltitudeContainer.style.display = 'none';
@@ -1482,6 +1505,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 let angleDeg = Math.round(Math.atan2(dy, dx) * 180 / Math.PI);
                 if (angleDeg < 0) angleDeg += 360;
                 infoDiv.innerHTML = `<strong>Selected Wall</strong><br/>Length: ${len}<br/>Angle: ${angleDeg}\u00b0`;
+                
+                if (editLengthContainer) {
+                    editLengthContainer.style.display = 'block';
+                    const lengthPx = Math.sqrt(dx * dx + dy * dy);
+                    editWallLengthInput.value = (lengthPx / engine.gridSize).toFixed(1);
+                }
+                
                 editThicknessContainer.style.display = 'flex';
                 const currentInches = Math.round((item.thickness || 9 * (engine.gridSize / 12)) / (engine.gridSize / 12));
                 editWallThicknessInput.value = currentInches;
@@ -1500,6 +1530,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dy = item.endY - item.startY;
                 const len = engine.pixelsToFeet(Math.sqrt(dx * dx + dy * dy));
                 infoDiv.innerHTML = `<strong>Measurement Line</strong><br/>Length: ${len}`;
+                if (editLengthContainer) editLengthContainer.style.display = 'none';
                 editThicknessContainer.style.display = 'none';
                 if (editLineTypeContainer) editLineTypeContainer.style.display = 'none';
                 editAltitudeContainer.style.display = 'none';
@@ -1516,6 +1547,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 areaPx = Math.abs(areaPx) / 2;
                 const areaSqFt = (areaPx / (engine.gridSize * engine.gridSize)).toFixed(2);
                 infoDiv.innerHTML = `<strong>Area Measurement</strong><br/>Points: ${item.points.length}<br/>Area: ${areaSqFt} sq. ft`;
+                if (editLengthContainer) editLengthContainer.style.display = 'none';
                 editThicknessContainer.style.display = 'none';
                 if (editLineTypeContainer) editLineTypeContainer.style.display = 'none';
                 editAltitudeContainer.style.display = 'none';
@@ -1541,6 +1573,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 rotateContainer.style.display = 'none';
             } else {
                 infoDiv.innerHTML = `<strong>${items.length} Items Selected</strong>`;
+                if (editLengthContainer) editLengthContainer.style.display = 'none';
                 editThicknessContainer.style.display = 'none';
                 if (editLineTypeContainer) editLineTypeContainer.style.display = 'none';
                 editAltitudeContainer.style.display = 'none';
