@@ -67,7 +67,7 @@ class CanvasEngine {
      * Called from render() but skips if bgColor hasn't changed — O(1) check each frame.
      */
     updateContrastColors() {
-        const bg = this.bgColor || '#1e1e22';
+        const bg = this.bgColor || getComputedStyle(document.body).getPropertyValue('--bg-canvas').trim() || '#ffffff';
         if (bg === this._lastBgColor) return;
         this._lastBgColor = bg;
 
