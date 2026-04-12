@@ -45,6 +45,15 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
+  // Menu Dropdown State
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  
+  // HUD state
+  const [showVastu, setShowVastu] = useState(false);
+  const [showGrid, setShowGrid] = useState(true);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [northAngle, setNorthAngle] = useState(0);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -57,18 +66,78 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       engineRef.current.onSelectionChange = (items: any[]) => {
         setSelectedItems([...items]);
       };
+
+      // [Phase 1] Attempt to load local auto-save data on initialization
+      const savedProject = localStorage.getItem('sketchmyhome_autosave');
+      if (savedProject) {
+        try {
+          const parsed = JSON.parse(savedProject);
+          if (parsed.scene && Array.isArray(parsed.scene)) {
+            engineRef.current.scene = parsed.scene;
+            engineRef.current.render();
+          }
+        } catch (e) {
+          console.error('[AutoSave] Failed to restore design from local storage.', e);
+        }
+      }
+
+      // [Phase 1] Auto-save observer (saves every 3 seconds if engine is active)
+      const autoSaveInterval = setInterval(() => {
+        if (engineRef.current && engineRef.current.scene.length > 0) {
+          localStorage.setItem('sketchmyhome_autosave', JSON.stringify({
+            v: 1.1,
+            name: 'SketchMyHome Active Session',
+            scene: engineRef.current.scene
+          }));
+        }
+      }, 3000);
+      
+      // Store interval ID on the engine to clean it up later if needed
+      (engineRef.current as any)._autoSaveInterval = autoSaveInterval;
     }
 
     const handleResize = () => {
       if (engineRef.current) engineRef.current.resize();
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in an input
+      if (document.activeElement?.tagName === 'INPUT') return;
+
+      if (e.key === 'f1') {
+        e.preventDefault();
+        setShowHelpModal(true);
+      }
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+      if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        handleNewDesign();
+      }
+      if (e.ctrlKey && e.key === 'o') {
+        e.preventDefault();
+        // Since we can't easily trigger the hidden file input without a ref, 
+        // we'll just let the menu handle it for now or add a ref.
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (toolsRef.current) toolsRef.current.setTool('delete');
+      }
+    };
+
     window.addEventListener('resize', handleResize);
+    window.addEventListener('keydown', handleKeyDown);
+
     // Initial resize to ensure the canvas fills the container correctly on mount
     setTimeout(handleResize, 100);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+      if (engineRef.current && (engineRef.current as any)._autoSaveInterval) {
+        clearInterval((engineRef.current as any)._autoSaveInterval);
+      }
     };
   }, []);
 
@@ -138,6 +207,39 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
     setSelectedItems([...engineRef.current.selectedItems]);
   };
 
+  const handleRotationChange = (val: number) => {
+    if (!engineRef.current) return;
+    engineRef.current.selectedItems.forEach((item: any) => {
+      if (item.type === 'object') {
+        item.rotation = val;
+      }
+    });
+    engineRef.current.render();
+    setSelectedItems([...engineRef.current.selectedItems]);
+  };
+
+  const handleTextContextChange = (text: string) => {
+    if (!engineRef.current) return;
+    engineRef.current.selectedItems.forEach((item: any) => {
+      if (item.type === 'object' && item.subType === 'text') {
+        item.text = text;
+      }
+    });
+    engineRef.current.render();
+    setSelectedItems([...engineRef.current.selectedItems]);
+  };
+
+  const handleTextSizeChange = (size: number) => {
+    if (!engineRef.current) return;
+    engineRef.current.selectedItems.forEach((item: any) => {
+      if (item.type === 'object' && item.subType === 'text') {
+        item.fontSize = size;
+      }
+    });
+    engineRef.current.render();
+    setSelectedItems([...engineRef.current.selectedItems]);
+  };
+
   const handleAltitudeChange = (val: number) => {
     if (!engineRef.current) return;
     engineRef.current.selectedItems.forEach((item: any) => {
@@ -169,6 +271,76 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const getInchesFromPx = (px: number) => {
     if (!engineRef.current) return 9;
     return Math.round(px / (engineRef.current.gridSize / 12));
+  };
+
+  const handleNewDesign = () => {
+    if (!engineRef.current) return;
+    if (confirm('Are you sure you want to start a new design? All unsaved changes will be lost.')) {
+      engineRef.current.scene = [];
+      engineRef.current.undoStack = [];
+      engineRef.current.render();
+      setSelectedItems([]);
+      setActiveMenu(null);
+    }
+  };
+
+  const handleOpenFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !engineRef.current) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (data.scene) {
+          engineRef.current.scene = data.scene;
+          engineRef.current.render();
+        }
+      } catch (err) {
+        alert('Failed to load project file.');
+      }
+    };
+    reader.readAsText(file);
+    setActiveMenu(null);
+  };
+
+  const handleExportPNG = async () => {
+    if (!engineRef.current) return;
+    try {
+      // @ts-ignore
+      const dataUrl = await engineRef.current.exportToDataURL('SketchMyHome Design');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `SketchMyHome_${Date.now()}.png`;
+      a.click();
+    } catch (e) {
+      console.error('Export failed', e);
+    }
+    setActiveMenu(null);
+  };
+
+  const toggleGrid = () => {
+    if (!engineRef.current) return;
+    const newState = !showGrid;
+    setShowGrid(newState);
+    engineRef.current.showGrid = newState;
+    engineRef.current.render();
+    setActiveMenu(null);
+  };
+
+  const toggleVastu = () => {
+    if (!engineRef.current) return;
+    const newState = !showVastu;
+    setShowVastu(newState);
+    engineRef.current.showVastu = newState;
+    engineRef.current.render();
+    setActiveMenu(null);
+  };
+
+  const handleUpdateNorthAngle = (angle: number) => {
+    if (!engineRef.current) return;
+    setNorthAngle(angle);
+    engineRef.current.northAngle = angle;
+    engineRef.current.render();
   };
 
   const handleLoginSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -252,10 +424,65 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
 
   return (
     <div className="main-wrapper bg-[#121214]">
-      <div className="win-menu-bar">
-        <div className="menu-item-group flex items-center gap-1">
-          <div className="menu-item py-1 px-3">File</div>
-          <div className="menu-item py-1 px-3">Edit</div>
+      <div className="win-menu-bar relative z-[100]">
+        <div className="menu-item-group flex items-center gap-1 h-full px-2">
+          {/* File Menu */}
+          <div className="relative group h-full">
+            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer ${activeMenu === 'file' ? 'bg-primary/20' : ''}`} onClick={() => setActiveMenu(activeMenu === 'file' ? null : 'file')}>File</div>
+            {activeMenu === 'file' && (
+              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000]">
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={handleNewDesign}><span>New Design</span><span className="opacity-40">Ctrl+N</span></div>
+                <label className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between">
+                  <span>Open Design</span><span className="opacity-40">Ctrl+O</span>
+                  <input type="file" className="hidden" accept=".json" onChange={handleOpenFile} />
+                </label>
+                <div className="h-px bg-white/5 my-1" />
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={handleSave}><span>Save JSON</span><span className="opacity-40">Ctrl+S</span></div>
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={handleExportPNG}><span>Export as Image</span><span className="opacity-40">PNG</span></div>
+              </div>
+            )}
+          </div>
+
+          {/* Edit Menu */}
+          <div className="relative group h-full">
+            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer ${activeMenu === 'edit' ? 'bg-primary/20' : ''}`} onClick={() => setActiveMenu(activeMenu === 'edit' ? null : 'edit')}>Edit</div>
+            {activeMenu === 'edit' && (
+              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000]">
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={() => { engineRef.current?.undo(); setActiveMenu(null); }}><span>Undo</span><span className="opacity-40">Ctrl+Z</span></div>
+                <div className="h-px bg-white/5 my-1" />
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs font-bold text-red-400" onClick={() => { if(confirm('Clear all?')){engineRef.current!.scene=[]; engineRef.current!.render(); setActiveMenu(null);}} }>Clear Canvas</div>
+              </div>
+            )}
+          </div>
+
+          {/* View Menu */}
+          <div className="relative group h-full">
+            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer ${activeMenu === 'view' ? 'bg-primary/20' : ''}`} onClick={() => setActiveMenu(activeMenu === 'view' ? null : 'view')}>View</div>
+            {activeMenu === 'view' && (
+              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000]">
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2" onClick={toggleGrid}>
+                  <div className={`w-3 h-3 border border-white/40 flex items-center justify-center`}>{showGrid && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}</div>
+                  Grid Lines
+                </div>
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2" onClick={toggleVastu}>
+                  <div className={`w-3 h-3 border border-white/40 flex items-center justify-center`}>{showVastu && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}</div>
+                  Vastu Overlay
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Help Menu */}
+          <div className="relative group h-full">
+            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer ${activeMenu === 'help' ? 'bg-primary/20' : ''}`} onClick={() => setActiveMenu(activeMenu === 'help' ? null : 'help')}>Help</div>
+            {activeMenu === 'help' && (
+              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000]">
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={() => { setShowHelpModal(true); setActiveMenu(null); }}><span>Shortcuts</span><span className="opacity-40">F1</span></div>
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs">Architectural Guide</div>
+              </div>
+            )}
+          </div>
+
           {user?.role === 'admin' && (
             <div className="menu-item py-1 px-3 text-primary font-bold cursor-pointer" onClick={() => setShowAdminModal(true)}>
               Admin Space
@@ -364,6 +591,31 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
             </div>
           </div>
         )}
+
+        {/* Shortcuts Help Modal */}
+        {showHelpModal && (
+          <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="bg-[#1e1e22] border border-white/10 rounded-xl w-full max-w-md shadow-2xl flex flex-col text-white">
+              <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                <h2 className="text-lg font-bold">Keyboard Shortcuts</h2>
+                <button onClick={() => setShowHelpModal(false)} className="opacity-50 hover:opacity-100 text-xl">&times;</button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs opacity-60 font-semibold uppercase tracking-widest">Action</span>
+                  <span className="text-xs opacity-60 font-semibold uppercase tracking-widest">Key</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Select Tool</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">S</kbd></div>
+                <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Wall Tool</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">W</kbd></div>
+                <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Pan Tool</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">P</kbd></div>
+                <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Delete Item</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">Del</kbd></div>
+                <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Undo Action</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">Ctrl+Z</kbd></div>
+                <div className="flex justify-between py-2"><span className="text-sm">Help Guide</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">F1</kbd></div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="w-[240px] flex-shrink-0 border-r border-black/10 bg-white relative flex flex-col pt-6 h-full pb-0 z-20">
           <div className="brand px-4">
             <h1>sketch my home</h1>
@@ -434,6 +686,32 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
         </div>
         <div className="canvas-container relative">
           <canvas ref={canvasRef} />
+          
+          {/* Compass HUD */}
+          <div 
+            className="absolute top-6 left-6 w-24 h-24 bg-white/90 backdrop-blur-md rounded-full border border-black/10 shadow-lg flex items-center justify-center z-20 group cursor-move"
+            style={{ transform: `rotate(${northAngle}deg)` }}
+          >
+            <div className="relative w-full h-full p-2">
+              <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] font-black text-primary">N</span>
+              <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[10px] font-black text-black/30">S</span>
+              <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-black text-black/30">W</span>
+              <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] font-black text-black/30">E</span>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-1/2 bg-gradient-to-t from-primary to-primary/40 rounded-full" />
+            </div>
+            {/* Angle Bubble */}
+            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+              {northAngle}° North
+            </div>
+            <input 
+              type="range" 
+              min="0" 
+              max="359" 
+              value={northAngle} 
+              onChange={(e) => handleUpdateNorthAngle(parseInt(e.target.value))}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+          </div>
 
           {/* Properties Panel (Integrated into Canvas space) */}
           {selectedItems.length > 0 && (
@@ -520,12 +798,55 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
 
                 {selectedItems.length > 0 && selectedItems.every(i => i.type === 'object') && (
                   <div className="text-xs space-y-2">
-                    <div className="flex justify-between border-b border-black/5 pb-2">
-                      <span className="opacity-50">Type</span>
-                      <span className="font-bold uppercase tracking-tight">{selectedItems[0].subType}</span>
-                    </div>
-                    {selectedItems.length === 1 && (
+                    <div className="flex justify-between border-b border-black/5 flex-col gap-3 pb-3">
                       <div className="flex justify-between">
+                        <span className="opacity-50">Type</span>
+                        <span className="font-bold uppercase tracking-tight">{selectedItems[0].subType}</span>
+                      </div>
+                      
+                      {selectedItems[0].subType === 'text' && (
+                        <div className="flex flex-col gap-2 mt-2">
+                           <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Content</label>
+                           <input 
+                             type="text" 
+                             value={selectedItems[0].text || ''} 
+                             onChange={(e) => handleTextContextChange(e.target.value)}
+                             className="w-full bg-black/5 border border-black/10 rounded-lg p-2 text-xs outline-none focus:border-primary transition-colors"
+                             placeholder="Enter text..."
+                           />
+                           
+                           <div className="flex justify-between items-center mt-2">
+                             <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Font Size ({selectedItems[0].fontSize || 16}px)</label>
+                           </div>
+                           <input
+                             type="range"
+                             min="8"
+                             max="72"
+                             value={selectedItems[0].fontSize || 16}
+                             className="w-full h-1.5 bg-black/5 rounded-lg appearance-none cursor-pointer accent-primary"
+                             onChange={(e) => handleTextSizeChange(parseInt(e.target.value))}
+                           />
+                        </div>
+                      )}
+
+                      {/* Rotation Slider for all objects including Text */}
+                      <div className="flex flex-col gap-2 mt-2 border-t border-black/5 pt-3">
+                         <div className="flex justify-between items-center text-[10px] uppercase tracking-widest font-bold">
+                           <span className="opacity-50">Rotation</span>
+                           <span className="text-primary">{selectedItems[0].rotation || 0}°</span>
+                         </div>
+                         <input
+                           type="range"
+                           min="0"
+                           max="360"
+                           value={selectedItems[0].rotation || 0}
+                           className="w-full h-1.5 bg-black/5 rounded-lg appearance-none cursor-pointer accent-primary"
+                           onChange={(e) => handleRotationChange(parseInt(e.target.value))}
+                         />
+                      </div>
+                    </div>
+                    {selectedItems.length === 1 && selectedItems[0].subType !== 'text' && (
+                      <div className="flex justify-between pt-1">
                         <span className="opacity-50">Dimensions</span>
                         <span className="font-mono">{engineRef.current?.pixelsToFeet(selectedItems[0].width)} x {engineRef.current?.pixelsToFeet(selectedItems[0].height)}</span>
                       </div>
