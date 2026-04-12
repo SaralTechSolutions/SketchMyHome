@@ -28,6 +28,12 @@ interface UserRegistryItem {
   updatedAt?: string;
 }
 
+interface DesignTab {
+  id: number;
+  name: string;
+  scene: any[];
+}
+
 export default function SketchMyHomeDesigner({ initialUser }: { initialUser: AppUser | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
@@ -55,6 +61,18 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [northAngle, setNorthAngle] = useState(0);
 
+  // Design Tabs State
+  const [tabs, setTabs] = useState<DesignTab[]>([{ id: 0, name: 'Design 1', scene: [] }]);
+  const [activeTabId, setActiveTabId] = useState<number>(0);
+  const tabsRef = useRef<DesignTab[]>([{ id: 0, name: 'Design 1', scene: [] }]);
+  const activeTabIdRef = useRef<number>(0);
+
+  // Sync refs with state for use in intervals/callbacks
+  useEffect(() => {
+    tabsRef.current = tabs;
+    activeTabIdRef.current = activeTabId;
+  }, [tabs, activeTabId]);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -77,10 +95,22 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
             content = SketchMyHomeCrypto.decrypt(content);
           }
           const parsed = JSON.parse(content);
-          if (parsed.scene && Array.isArray(parsed.scene)) {
+          
+          // Migration: Wrap single scene projects into tabs structure
+          if (parsed.scene && !parsed.designs) {
+            const initialTabs = [{ id: 0, name: 'Design 1', scene: parsed.scene }];
+            setTabs(initialTabs);
+            setActiveTabId(0);
             engineRef.current.scene = parsed.scene;
-            engineRef.current.render();
+          } else if (parsed.designs && Array.isArray(parsed.designs)) {
+            setTabs(parsed.designs);
+            const activeIdx = parsed.activeDesignIndex || 0;
+            const activeTab = parsed.designs[activeIdx] || parsed.designs[0];
+            setActiveTabId(activeTab.id);
+            engineRef.current.scene = activeTab.scene || [];
           }
+          
+          engineRef.current.render();
         } catch (e) {
           console.error('[AutoSave] Failed to restore design from local storage.', e);
         }
@@ -88,11 +118,20 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
 
       // [Phase 1] Auto-save observer (saves every 3 seconds if engine is active)
       const autoSaveInterval = setInterval(() => {
-        if (engineRef.current && engineRef.current.scene.length > 0) {
+        const engine = engineRef.current;
+        if (engine && engine.scene.length > 0) {
+          // Sync current scene to active tab before saving
+          const currentTabs = [...tabsRef.current];
+          const activeIdx = currentTabs.findIndex(t => t.id === activeTabIdRef.current);
+          if (activeIdx !== -1) {
+            currentTabs[activeIdx].scene = engine.scene;
+          }
+
           const payload = JSON.stringify({
-            v: 1.1,
+            version: '2.3.0',
             name: 'SketchMyHome Active Session',
-            scene: engineRef.current.scene
+            activeDesignIndex: activeIdx !== -1 ? activeIdx : 0,
+            designs: currentTabs
           });
           const encrypted = SketchMyHomeCrypto.encrypt(payload);
           localStorage.setItem('sketchmyhome_autosave', encrypted);
@@ -164,12 +203,21 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const handleSave = () => {
     const engine = engineRef.current;
     if (!engine) return;
+
+    // Sync current scene to active tab before saving
+    const currentTabs = [...tabs];
+    const activeIdx = currentTabs.findIndex(t => t.id === activeTabId);
+    if (activeIdx !== -1) {
+      currentTabs[activeIdx].scene = engine.scene;
+    }
+
     const project = {
-      v: 1.1,
-      name: 'SketchMyHome Design',
-      engine: 'NextJS',
-      scene: engine.scene
+      version: '2.3.0',
+      projectName: 'SketchMyHome Design',
+      activeDesignIndex: activeIdx !== -1 ? activeIdx : 0,
+      designs: currentTabs
     };
+    
     const jsonStr = JSON.stringify(project);
     const encryptedContent = SketchMyHomeCrypto.encrypt(jsonStr);
     
@@ -177,7 +225,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `sketchmyhome_design_${Date.now()}.rproj`;
+    a.download = `sketchmyhome_project_${Date.now()}.rproj`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -294,12 +342,82 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const handleNewDesign = () => {
     const engine = engineRef.current;
     if (!engine) return;
-    if (confirm('Are you sure you want to start a new design? All unsaved changes will be lost.')) {
+    if (confirm('Are you sure you want to start a new project? All unsaved changes will be lost.')) {
       engine.scene = [];
       engine.undoStack = [];
       engine.render();
+      setTabs([{ id: 0, name: 'Design 1', scene: [] }]);
+      setActiveTabId(0);
       setSelectedItems([]);
       setActiveMenu(null);
+    }
+  };
+
+  const switchTab = (tabId: number) => {
+    const engine = engineRef.current;
+    if (!engine || tabId === activeTabId) return;
+
+    // Save current scene to active tab
+    const updatedTabs = [...tabs];
+    const oldIdx = updatedTabs.findIndex(t => t.id === activeTabId);
+    if (oldIdx !== -1) {
+      updatedTabs[oldIdx].scene = engine.scene;
+    }
+
+    // Load new scene
+    const newTab = updatedTabs.find(t => t.id === tabId);
+    if (newTab) {
+      engine.scene = newTab.scene || [];
+      engine.undoStack = [];
+      engine.render();
+      setActiveTabId(tabId);
+      setTabs(updatedTabs);
+    }
+    setActiveMenu(null);
+  };
+
+  const addTab = () => {
+    const newId = tabs.length > 0 ? Math.max(...tabs.map(t => t.id)) + 1 : 0;
+    const newTab = { id: newId, name: `Design ${newId + 1}`, scene: [] };
+    
+    // Switch to the new tab immediately
+    const engine = engineRef.current;
+    if (engine) {
+      const updatedTabs = [...tabs];
+      const oldIdx = updatedTabs.findIndex(t => t.id === activeTabId);
+      if (oldIdx !== -1) updatedTabs[oldIdx].scene = engine.scene;
+      
+      engine.scene = [];
+      engine.undoStack = [];
+      engine.render();
+      
+      setTabs([...updatedTabs, newTab]);
+      setActiveTabId(newId);
+    }
+  };
+
+  const removeTab = (tabId: number) => {
+    if (tabs.length <= 1) return;
+    if (!confirm('Are you sure you want to delete this design tab?')) return;
+
+    const updatedTabs = tabs.filter(t => t.id !== tabId);
+    if (tabId === activeTabId) {
+      const newActive = updatedTabs[0];
+      setActiveTabId(newActive.id);
+      if (engineRef.current) {
+        engineRef.current.scene = newActive.scene;
+        engineRef.current.render();
+      }
+    }
+    setTabs(updatedTabs);
+  };
+
+  const renameTab = (tabId: number) => {
+    const tab = tabs.find(t => t.id === tabId);
+    if (!tab) return;
+    const newName = prompt('Enter new tab name:', tab.name);
+    if (newName && newName.trim()) {
+      setTabs(tabs.map(t => t.id === tabId ? { ...t, name: newName.trim() } : t));
     }
   };
 
@@ -319,10 +437,23 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
         }
         
         const data = JSON.parse(finalContent);
-        if (data.scene) {
+        
+        // Migration support for multi-tab
+        if (data.designs && Array.isArray(data.designs)) {
+          setTabs(data.designs);
+          const activeIdx = data.activeDesignIndex || 0;
+          const activeTab = data.designs[activeIdx] || data.designs[0];
+          setActiveTabId(activeTab.id);
+          engine.scene = activeTab.scene;
+        } else if (data.scene) {
+          // Wrap single scene legacy files
+          const singleTab = { id: 0, name: 'Imported Design', scene: data.scene };
+          setTabs([singleTab]);
+          setActiveTabId(0);
           engine.scene = data.scene;
-          engine.render();
         }
+        
+        engine.render();
       } catch (err) {
         alert('Failed to load project file. The file may be corrupt or encrypted with a different key.');
       }
@@ -532,6 +663,37 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
               <LogIn size={14} /> Sign In
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Design Tabs Bar */}
+      <div className="design-tabs-bar bg-[#1e1e22] border-b border-white/5 flex items-center px-4 overflow-x-auto min-h-[40px] z-10 scrollbar-hide">
+        <div className="flex gap-1 h-full items-center">
+          {tabs.map((tab) => (
+            <div 
+              key={tab.id}
+              className={`group flex items-center h-full px-4 border-b-2 transition-all cursor-pointer select-none ${activeTabId === tab.id ? 'border-primary bg-primary/10 text-white' : 'border-transparent text-white/40 hover:text-white/60'}`}
+              onClick={() => switchTab(tab.id)}
+              onDoubleClick={() => renameTab(tab.id)}
+            >
+              <span className="text-[11px] font-bold tracking-tight uppercase whitespace-nowrap">{tab.name}</span>
+              {tabs.length > 1 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); removeTab(tab.id); }}
+                  className="ml-3 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity p-0.5"
+                >
+                  <Plus size={12} className="rotate-45" />
+                </button>
+              )}
+            </div>
+          ))}
+          <button 
+            onClick={addTab}
+            className="ml-2 flex items-center justify-center w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-white/40 hover:text-primary transition-all p-1"
+            title="Add New Design"
+          >
+            <Plus size={14} />
+          </button>
         </div>
       </div>
 

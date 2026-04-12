@@ -1,0 +1,24 @@
+# Docker Compose for Sketch My Home
+# Manages both modern (Next.js) and legacy (Nginx) instances for local testing.
+
+services:
+  modern-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.modern
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    restart: always
+
+  legacy-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    restart: always
