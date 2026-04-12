@@ -12,6 +12,7 @@ import { createClient } from '@/utils/supabase/client';
 import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand, DoorOpen, AppWindow, AlignJustify, Bed, Circle, Library, Bath, Droplets, Armchair, Type, Maximize2, Minus, Plus, Maximize } from 'lucide-react';
 // @ts-ignore
 import { ToolsManager } from '@/lib/sketch-my-home/tools';
+import { SketchMyHomeCrypto } from '@/lib/sketch-my-home/crypto';
 
 interface AppUser {
   id: string;
@@ -71,7 +72,11 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       const savedProject = localStorage.getItem('sketchmyhome_autosave');
       if (savedProject) {
         try {
-          const parsed = JSON.parse(savedProject);
+          let content = savedProject;
+          if (SketchMyHomeCrypto.isEncrypted(content)) {
+            content = SketchMyHomeCrypto.decrypt(content);
+          }
+          const parsed = JSON.parse(content);
           if (parsed.scene && Array.isArray(parsed.scene)) {
             engineRef.current.scene = parsed.scene;
             engineRef.current.render();
@@ -84,11 +89,13 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       // [Phase 1] Auto-save observer (saves every 3 seconds if engine is active)
       const autoSaveInterval = setInterval(() => {
         if (engineRef.current && engineRef.current.scene.length > 0) {
-          localStorage.setItem('sketchmyhome_autosave', JSON.stringify({
+          const payload = JSON.stringify({
             v: 1.1,
             name: 'SketchMyHome Active Session',
             scene: engineRef.current.scene
-          }));
+          });
+          const encrypted = SketchMyHomeCrypto.encrypt(payload);
+          localStorage.setItem('sketchmyhome_autosave', encrypted);
         }
       }, 3000);
       
@@ -163,16 +170,19 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       engine: 'NextJS',
       scene: engine.scene
     };
-    const jsonStr = JSON.stringify(project, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const jsonStr = JSON.stringify(project);
+    const encryptedContent = SketchMyHomeCrypto.encrypt(jsonStr);
+    
+    const blob = new Blob([encryptedContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `sketchmyhome_design_${Date.now()}.json`;
+    a.download = `sketchmyhome_design_${Date.now()}.rproj`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    setActiveMenu(null);
   };
 
   const fetchAdminData = async (): Promise<void> => {
@@ -299,15 +309,22 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
     if (!file || !engine) return;
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
-        const data = JSON.parse(ev.target?.result as string);
+        const rawContent = ev.target?.result as string;
+        let finalContent = rawContent;
+        
+        if (SketchMyHomeCrypto.isEncrypted(rawContent)) {
+          finalContent = SketchMyHomeCrypto.decrypt(rawContent);
+        }
+        
+        const data = JSON.parse(finalContent);
         if (data.scene) {
           engine.scene = data.scene;
           engine.render();
         }
       } catch (err) {
-        alert('Failed to load project file.');
+        alert('Failed to load project file. The file may be corrupt or encrypted with a different key.');
       }
     };
     reader.readAsText(file);
@@ -443,43 +460,43 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
         <div className="menu-item-group flex items-center gap-1 h-full px-2">
           {/* File Menu */}
           <div className="relative group h-full">
-            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer ${activeMenu === 'file' ? 'bg-primary/20' : ''}`} onClick={() => setActiveMenu(activeMenu === 'file' ? null : 'file')}>File</div>
+            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer transition-colors ${activeMenu === 'file' ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/5'}`} onClick={() => setActiveMenu(activeMenu === 'file' ? null : 'file')}>File</div>
             {activeMenu === 'file' && (
-              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000]">
-                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={handleNewDesign}><span>New Design</span><span className="opacity-40">Ctrl+N</span></div>
-                <label className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between">
-                  <span>Open Design</span><span className="opacity-40">Ctrl+O</span>
-                  <input type="file" className="hidden" accept=".json" onChange={handleOpenFile} />
+              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white" onClick={handleNewDesign}><span>New Design</span><span className="opacity-60">Ctrl+N</span></div>
+                <label className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white">
+                  <span>Open Design</span><span className="opacity-60">Ctrl+O</span>
+                  <input type="file" className="hidden" accept=".json,.rproj" onChange={handleOpenFile} />
                 </label>
                 <div className="h-px bg-white/5 my-1" />
-                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={handleSave}><span>Save JSON</span><span className="opacity-40">Ctrl+S</span></div>
-                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={handleExportPNG}><span>Export as Image</span><span className="opacity-40">PNG</span></div>
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white" onClick={handleSave}><span>Save Project (.rproj)</span><span className="opacity-60">Ctrl+S</span></div>
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white" onClick={handleExportPNG}><span>Export as Image</span><span className="opacity-60">PNG</span></div>
               </div>
             )}
           </div>
 
           {/* Edit Menu */}
           <div className="relative group h-full">
-            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer ${activeMenu === 'edit' ? 'bg-primary/20' : ''}`} onClick={() => setActiveMenu(activeMenu === 'edit' ? null : 'edit')}>Edit</div>
+            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer transition-colors ${activeMenu === 'edit' ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/5'}`} onClick={() => setActiveMenu(activeMenu === 'edit' ? null : 'edit')}>Edit</div>
             {activeMenu === 'edit' && (
-              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000]">
-                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={() => { engineRef.current?.undo(); setActiveMenu(null); }}><span>Undo</span><span className="opacity-40">Ctrl+Z</span></div>
+              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white" onClick={() => { engineRef.current?.undo(); setActiveMenu(null); }}><span>Undo</span><span className="opacity-60">Ctrl+Z</span></div>
                 <div className="h-px bg-white/5 my-1" />
-                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs font-bold text-red-400" onClick={() => { if(confirm('Clear all?')){engineRef.current!.scene=[]; engineRef.current!.render(); setActiveMenu(null);}} }>Clear Canvas</div>
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs font-bold text-red-400 hover:text-red-300" onClick={() => { if(confirm('Clear all?')){engineRef.current!.scene=[]; engineRef.current!.render(); setActiveMenu(null);}} }>Clear Canvas</div>
               </div>
             )}
           </div>
 
           {/* View Menu */}
           <div className="relative group h-full">
-            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer ${activeMenu === 'view' ? 'bg-primary/20' : ''}`} onClick={() => setActiveMenu(activeMenu === 'view' ? null : 'view')}>View</div>
+            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer transition-colors ${activeMenu === 'view' ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/5'}`} onClick={() => setActiveMenu(activeMenu === 'view' ? null : 'view')}>View</div>
             {activeMenu === 'view' && (
-              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000]">
-                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2" onClick={toggleGrid}>
+              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2 text-white/90 hover:text-white" onClick={toggleGrid}>
                   <div className={`w-3 h-3 border border-white/40 flex items-center justify-center`}>{showGrid && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}</div>
                   Grid Lines
                 </div>
-                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2" onClick={toggleVastu}>
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2 text-white/90 hover:text-white" onClick={toggleVastu}>
                   <div className={`w-3 h-3 border border-white/40 flex items-center justify-center`}>{showVastu && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}</div>
                   Vastu Overlay
                 </div>
@@ -489,11 +506,11 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
 
           {/* Help Menu */}
           <div className="relative group h-full">
-            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer ${activeMenu === 'help' ? 'bg-primary/20' : ''}`} onClick={() => setActiveMenu(activeMenu === 'help' ? null : 'help')}>Help</div>
+            <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer transition-colors ${activeMenu === 'help' ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/5'}`} onClick={() => setActiveMenu(activeMenu === 'help' ? null : 'help')}>Help</div>
             {activeMenu === 'help' && (
-              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000]">
-                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between" onClick={() => { setShowHelpModal(true); setActiveMenu(null); }}><span>Shortcuts</span><span className="opacity-40">F1</span></div>
-                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs">Architectural Guide</div>
+              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white" onClick={() => { setShowHelpModal(true); setActiveMenu(null); }}><span>Shortcuts</span><span className="opacity-60">F1</span></div>
+                <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs text-white/90 hover:text-white">Architectural Guide</div>
               </div>
             )}
           </div>
