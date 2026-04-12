@@ -66,12 +66,21 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const [activeTabId, setActiveTabId] = useState<number>(0);
   const tabsRef = useRef<DesignTab[]>([{ id: 0, name: 'Design 1', scene: [] }]);
   const activeTabIdRef = useRef<number>(0);
+  
+  // Workspace Settings State
+  const [canvasBgColor, setCanvasBgColor] = useState('#1e293b'); // Slate-800 default
+  const canvasBgColorRef = useRef('#1e293b');
 
   // Sync refs with state for use in intervals/callbacks
   useEffect(() => {
     tabsRef.current = tabs;
     activeTabIdRef.current = activeTabId;
-  }, [tabs, activeTabId]);
+    canvasBgColorRef.current = canvasBgColor;
+    if (engineRef.current) {
+      engineRef.current.bgColor = canvasBgColor;
+      engineRef.current.render();
+    }
+  }, [tabs, activeTabId, canvasBgColor]);
 
   const supabase = createClient();
 
@@ -108,6 +117,12 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
             const activeTab = parsed.designs[activeIdx] || parsed.designs[0];
             setActiveTabId(activeTab.id);
             engineRef.current.scene = activeTab.scene || [];
+            
+            // Restore workspace settings if present
+            if (parsed.settings && parsed.settings.bgColor) {
+              setCanvasBgColor(parsed.settings.bgColor);
+              engineRef.current.bgColor = parsed.settings.bgColor;
+            }
           }
           
           engineRef.current.render();
@@ -131,6 +146,9 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
             version: '2.3.0',
             name: 'SketchMyHome Active Session',
             activeDesignIndex: activeIdx !== -1 ? activeIdx : 0,
+            settings: {
+              bgColor: canvasBgColorRef.current
+            },
             designs: currentTabs
           });
           const encrypted = SketchMyHomeCrypto.encrypt(payload);
@@ -215,6 +233,9 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       version: '2.3.0',
       projectName: 'SketchMyHome Design',
       activeDesignIndex: activeIdx !== -1 ? activeIdx : 0,
+      settings: {
+        bgColor: canvasBgColor
+      },
       designs: currentTabs
     };
     
@@ -445,6 +466,12 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
           const activeTab = data.designs[activeIdx] || data.designs[0];
           setActiveTabId(activeTab.id);
           engine.scene = activeTab.scene;
+          
+          // Restore workspace settings
+          if (data.settings && data.settings.bgColor) {
+            setCanvasBgColor(data.settings.bgColor);
+            engine.bgColor = data.settings.bgColor;
+          }
         } else if (data.scene) {
           // Wrap single scene legacy files
           const singleTab = { id: 0, name: 'Imported Design', scene: data.scene };
@@ -630,6 +657,36 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                 <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2 text-white/90 hover:text-white" onClick={toggleVastu}>
                   <div className={`w-3 h-3 border border-white/40 flex items-center justify-center`}>{showVastu && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}</div>
                   Vastu Overlay
+                </div>
+                
+                <div className="h-px bg-white/5 my-1" />
+                <div className="px-4 py-2 flex flex-col gap-2">
+                  <span className="text-[10px] uppercase tracking-widest font-bold opacity-40">Workspace Background</span>
+                  <div className="flex gap-2">
+                    {[
+                      { name: 'Slate', color: '#1e293b' },
+                      { name: 'Charcoal', color: '#262626' },
+                      { name: 'Navy', color: '#0f172a' },
+                      { name: 'Classic', color: '#ffffff' }
+                    ].map((preset) => (
+                      <button 
+                        key={preset.name}
+                        onClick={() => setCanvasBgColor(preset.color)}
+                        className={`w-5 h-5 rounded-full border ${canvasBgColor === preset.color ? 'border-primary ring-1 ring-primary' : 'border-white/20'}`}
+                        style={{ backgroundColor: preset.color }}
+                        title={preset.name}
+                      />
+                    ))}
+                    <div className="relative w-5 h-5 cursor-pointer">
+                      <input 
+                        type="color" 
+                        value={canvasBgColor} 
+                        onChange={(e) => setCanvasBgColor(e.target.value)}
+                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                      />
+                      <div className="w-full h-full rounded-full border border-white/20 bg-gradient-to-tr from-red-500 via-green-500 to-blue-500" />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
