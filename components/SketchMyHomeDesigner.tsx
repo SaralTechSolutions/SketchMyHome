@@ -586,14 +586,14 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   };
 
   return (
-    <div className="main-wrapper bg-[#121214]">
+    <div className="main-wrapper bg-slate-950 font-sans selection:bg-primary/30">
       <div className="win-menu-bar relative z-[100]">
         <div className="menu-item-group flex items-center gap-1 h-full px-2">
           {/* File Menu */}
           <div className="relative group h-full">
             <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer transition-colors ${activeMenu === 'file' ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/5'}`} onClick={() => setActiveMenu(activeMenu === 'file' ? null : 'file')}>File</div>
             {activeMenu === 'file' && (
-              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
+              <div className="absolute top-full left-0 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/5 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
                 <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white" onClick={handleNewDesign}><span>New Design</span><span className="opacity-60">Ctrl+N</span></div>
                 <label className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white">
                   <span>Open Design</span><span className="opacity-60">Ctrl+O</span>
@@ -610,7 +610,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
           <div className="relative group h-full">
             <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer transition-colors ${activeMenu === 'edit' ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/5'}`} onClick={() => setActiveMenu(activeMenu === 'edit' ? null : 'edit')}>Edit</div>
             {activeMenu === 'edit' && (
-              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
+              <div className="absolute top-full left-0 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/5 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
                 <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white" onClick={() => { engineRef.current?.undo(); setActiveMenu(null); }}><span>Undo</span><span className="opacity-60">Ctrl+Z</span></div>
                 <div className="h-px bg-white/5 my-1" />
                 <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs font-bold text-red-400 hover:text-red-300" onClick={() => { if(confirm('Clear all?')){engineRef.current!.scene=[]; engineRef.current!.render(); setActiveMenu(null);}} }>Clear Canvas</div>
@@ -622,7 +622,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
           <div className="relative group h-full">
             <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer transition-colors ${activeMenu === 'view' ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/5'}`} onClick={() => setActiveMenu(activeMenu === 'view' ? null : 'view')}>View</div>
             {activeMenu === 'view' && (
-              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
+              <div className="absolute top-full left-0 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/5 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
                 <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2 text-white/90 hover:text-white" onClick={toggleGrid}>
                   <div className={`w-3 h-3 border border-white/40 flex items-center justify-center`}>{showGrid && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}</div>
                   Grid Lines
@@ -639,7 +639,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
           <div className="relative group h-full">
             <div className={`menu-item py-1 px-3 h-full flex items-center cursor-pointer transition-colors ${activeMenu === 'help' ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/5'}`} onClick={() => setActiveMenu(activeMenu === 'help' ? null : 'help')}>Help</div>
             {activeMenu === 'help' && (
-              <div className="absolute top-full left-0 w-48 bg-[#1e1e22] border border-white/10 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
+              <div className="absolute top-full left-0 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/5 shadow-2xl py-2 flex flex-col z-[1000] rounded-b-lg">
                 <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex justify-between text-white/90 hover:text-white" onClick={() => { setShowHelpModal(true); setActiveMenu(null); }}><span>Shortcuts</span><span className="opacity-60">F1</span></div>
                 <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs text-white/90 hover:text-white">Architectural Guide</div>
               </div>
@@ -667,7 +667,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       </div>
 
       {/* Design Tabs Bar */}
-      <div className="design-tabs-bar bg-[#1e1e22] border-b border-white/5 flex items-center px-4 overflow-x-auto min-h-[40px] z-10 scrollbar-hide">
+      <div className="design-tabs-bar bg-slate-900 border-b border-white/5 flex items-center px-4 overflow-x-auto min-h-[40px] z-10 scrollbar-hide">
         <div className="flex gap-1 h-full items-center">
           {tabs.map((tab) => (
             <div 
@@ -700,8 +700,8 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       <div className="app-container">
         {/* Auth Modal Overlay */}
         {showAuthModal && (
-          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-            <div className="bg-[#1e1e22] border border-white/10 rounded-xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col text-white">
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+            <div className="bg-slate-900 border border-white/10 rounded-xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col text-white">
               <div className="p-8 pb-6 flex flex-col items-center">
                 <h2 className="text-2xl font-bold mb-2 text-primary">Welcome Back</h2>
                 <p className="text-sm text-white/50 text-center">Continue your architectural journey</p>

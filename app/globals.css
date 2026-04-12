@@ -6,13 +6,13 @@
 
 :root {
     --primary: #6366f1;
-    --bg-dark: #f8fafc;
-    --bg-canvas: #ffffff;
-    --panel-bg: rgba(255, 255, 255, 0.9);
-    --text-main: #0f172a;
-    --text-muted: #64748b;
-    --border-color: #e2e8f0;
-    --border-light: rgba(0, 0, 0, 0.1);
+    --bg-dark: #0f172a;      /* Slate-950 */
+    --bg-canvas: #1e293b;    /* Slate-800 */
+    --panel-bg: rgba(15, 23, 42, 0.85);
+    --text-main: #f1f5f9;    /* Slate-100 */
+    --text-muted: #94a3b8;   /* Slate-400 */
+    --border-color: rgba(255, 255, 255, 0.05);
+    --border-light: rgba(255, 255, 255, 0.03);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,7 +33,7 @@ body {
 
 .win-menu-bar { 
     height: 32px; 
-    background: #ffffff; 
+    background: #0f172a; 
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
@@ -95,7 +95,7 @@ body {
 }
 
 .tool-btn:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(255, 255, 255, 0.03);
     color: var(--text-main);
 }
 
