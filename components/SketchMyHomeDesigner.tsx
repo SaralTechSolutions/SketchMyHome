@@ -9,10 +9,38 @@ import React, { useEffect, useRef, useState } from 'react';
 // @ts-ignore
 import { CanvasEngine } from '@/lib/sketch-my-home/engine';
 import { createClient } from '@/utils/supabase/client';
-import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand, DoorOpen, AppWindow, AlignJustify, Bed, Circle, Library, Bath, Droplets, Armchair, Type, Maximize2, Minus, Plus, Maximize, Ruler } from 'lucide-react';
+import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand, DoorOpen, AppWindow, AlignJustify, Bed, Circle, Library, Bath, Droplets, Armchair, Type, Maximize2, Minus, Plus, Maximize, Ruler, Box, LandPlot, CircleOff } from 'lucide-react';
 // @ts-ignore
 import { ToolsManager } from '@/lib/sketch-my-home/tools';
 import { SketchMyHomeCrypto } from '@/lib/sketch-my-home/crypto';
+import { SESSION_3D_SCENE_KEY } from '@/lib/plan3d/sessionScene';
+import {
+  needsSiteBoundary,
+  DEFAULT_PLAN_SCALE_DENOMINATOR,
+  MIN_VIEW_SCALE,
+  MAX_VIEW_SCALE,
+} from '@/lib/sketch-my-home/planBoundary';
+
+const AUTH_LOG_PREFIX = '[SketchMyHome auth]';
+
+function authLog(step: string, detail?: Record<string, unknown>) {
+  if (detail) {
+    console.info(AUTH_LOG_PREFIX, step, detail);
+  } else {
+    console.info(AUTH_LOG_PREFIX, step);
+  }
+}
+
+function isValidEmail(email: string): boolean {
+  const s = email.trim();
+  if (!s) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+/** Temporary fixed demo login — remove or replace when real auth is enforced */
+const DEV_LOGIN_EMAIL = 'a@b.com';
+const DEV_LOGIN_PASSWORD = 'test';
+const DEV_LOGIN_COUPON = 'coupon';
 
 interface AppUser {
   id: string;
@@ -32,13 +60,18 @@ interface DesignTab {
   id: number;
   name: string;
   scene: any[];
+  /** Vertical stacking order (0 = ground). */
+  floorIndex?: number;
+  /** Height of this floor slab in feet (metadata for future 3D). */
+  elevationFt?: number;
 }
 
 export default function SketchMyHomeDesigner({ initialUser }: { initialUser: AppUser | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
   const toolsRef = useRef<ToolsManager | null>(null);
-  const [activeTool, setActiveTool] = useState<string>('select');
+  const [activeTool, setActiveTool] = useState<string>('boundary');
+  const [layoutHint, setLayoutHint] = useState<string | null>(null);
   const [user, setUser] = useState<AppUser | null>(initialUser);
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -46,9 +79,9 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   
   // Auth Form State
   const [showAuthModal, setShowAuthModal] = useState(true); // Always true on landing per request
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authCoupon, setAuthCoupon] = useState('');
+  const [authEmail, setAuthEmail] = useState(DEV_LOGIN_EMAIL);
+  const [authPassword, setAuthPassword] = useState(DEV_LOGIN_PASSWORD);
+  const [authCoupon, setAuthCoupon] = useState(DEV_LOGIN_COUPON);
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
@@ -61,10 +94,26 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [northAngle, setNorthAngle] = useState(0);
 
+  /** Shown before the Wall tool activates; sets `#wall-height` for new wall segments. */
+  const [showWallHeightModal, setShowWallHeightModal] = useState(false);
+  const [draftWallHeightFt, setDraftWallHeightFt] = useState(10);
+
+  /** Shown before the Door tool activates; sets `#door-height` for new doors (3D opening height). */
+  const [showDoorHeightModal, setShowDoorHeightModal] = useState(false);
+  const [draftDoorHeightFt, setDraftDoorHeightFt] = useState(7.5);
+
+  /** Shown before the Window tool activates; sets `#window-height` for new windows (3D opening height). */
+  const [showWindowHeightModal, setShowWindowHeightModal] = useState(false);
+  const [draftWindowHeightFt, setDraftWindowHeightFt] = useState(5);
+
   // Design Tabs State
-  const [tabs, setTabs] = useState<DesignTab[]>([{ id: 0, name: 'Design 1', scene: [] }]);
+  const [tabs, setTabs] = useState<DesignTab[]>([
+    { id: 0, name: 'Ground floor', scene: [], floorIndex: 0, elevationFt: 0 },
+  ]);
   const [activeTabId, setActiveTabId] = useState<number>(0);
-  const tabsRef = useRef<DesignTab[]>([{ id: 0, name: 'Design 1', scene: [] }]);
+  const tabsRef = useRef<DesignTab[]>([
+    { id: 0, name: 'Ground floor', scene: [], floorIndex: 0, elevationFt: 0 },
+  ]);
   const activeTabIdRef = useRef<number>(0);
   
   // Workspace Settings State
@@ -88,8 +137,8 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   useEffect(() => {
     if (canvasRef.current && !engineRef.current) {
       engineRef.current = new CanvasEngine(canvasRef.current);
+      engineRef.current.planScaleDenominator = DEFAULT_PLAN_SCALE_DENOMINATOR;
       toolsRef.current = new ToolsManager(engineRef.current);
-      toolsRef.current.setTool('select');
 
       // Sync selection state with React
       engineRef.current.onSelectionChange = (items: any[]) => {
@@ -108,7 +157,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
           
           // Migration: Wrap single scene projects into tabs structure
           if (parsed.scene && !parsed.designs) {
-            const initialTabs = [{ id: 0, name: 'Design 1', scene: parsed.scene }];
+            const initialTabs = [{ id: 0, name: 'Ground floor', scene: parsed.scene, floorIndex: 0, elevationFt: 0 }];
             setTabs(initialTabs);
             setActiveTabId(0);
             engineRef.current.scene = parsed.scene;
@@ -129,12 +178,27 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                 setNorthAngle(parsed.settings.northAngle);
                 engineRef.current.northAngle = parsed.settings.northAngle;
               }
+              if (parsed.settings.planScaleDenominator != null) {
+                (engineRef.current as any).planScaleDenominator = parsed.settings.planScaleDenominator;
+              }
             }
           }
           
           engineRef.current.render();
         } catch (e) {
           console.error('[AutoSave] Failed to restore design from local storage.', e);
+        }
+      }
+
+      const engInit = engineRef.current;
+      const toolsInit = toolsRef.current;
+      if (engInit && toolsInit) {
+        if (needsSiteBoundary(engInit.scene)) {
+          toolsInit.setTool('boundary');
+          setActiveTool('boundary');
+        } else {
+          toolsInit.setTool('select');
+          setActiveTool('select');
         }
       }
 
@@ -155,7 +219,8 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
             activeDesignIndex: activeIdx !== -1 ? activeIdx : 0,
             settings: {
               bgColor: canvasBgColorRef.current,
-              northAngle: engine.northAngle || 0
+              northAngle: engine.northAngle || 0,
+              planScaleDenominator: (engine as any).planScaleDenominator ?? DEFAULT_PLAN_SCALE_DENOMINATOR,
             },
             designs: currentTabs
           });
@@ -222,11 +287,119 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
     }
   }, [showAdminModal, user]);
 
+  useEffect(() => {
+    if (!showWallHeightModal && !showDoorHeightModal && !showWindowHeightModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowWallHeightModal(false);
+        setShowDoorHeightModal(false);
+        setShowWindowHeightModal(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showWallHeightModal, showDoorHeightModal, showWindowHeightModal]);
+
   const handleToolClick = (toolTarget: string) => {
-    setActiveTool(toolTarget);
-    if (toolsRef.current) {
-      toolsRef.current.setTool(toolTarget);
+    if (!toolsRef.current || !engineRef.current) return;
+
+    if (toolTarget === 'wall') {
+      if (needsSiteBoundary(engineRef.current.scene)) {
+        setLayoutHint(
+          'Draw the site boundary (lot) first: click each corner, then click near the first corner or press Enter to close. Walls, rooms, openings, and area shapes stay inside the amber outline.'
+        );
+        return;
+      }
+      const hEl = document.getElementById('wall-height') as HTMLInputElement | null;
+      const parsed = hEl?.value ? parseFloat(hEl.value) : NaN;
+      setDraftWallHeightFt(Number.isFinite(parsed) && parsed > 0 ? Math.min(30, Math.max(1, parsed)) : 10);
+      setShowWallHeightModal(true);
+      return;
     }
+
+    if (toolTarget === 'door') {
+      if (needsSiteBoundary(engineRef.current.scene)) {
+        setLayoutHint(
+          'Draw the site boundary (lot) first: click each corner, then click near the first corner or press Enter to close. Walls, rooms, openings, and area shapes stay inside the amber outline.'
+        );
+        return;
+      }
+      const dEl = document.getElementById('door-height') as HTMLInputElement | null;
+      const parsed = dEl?.value ? parseFloat(dEl.value) : NaN;
+      setDraftDoorHeightFt(Number.isFinite(parsed) && parsed > 0 ? Math.min(30, Math.max(1, parsed)) : 7.5);
+      setShowDoorHeightModal(true);
+      return;
+    }
+
+    if (toolTarget === 'window') {
+      if (needsSiteBoundary(engineRef.current.scene)) {
+        setLayoutHint(
+          'Draw the site boundary (lot) first: click each corner, then click near the first corner or press Enter to close. Walls, rooms, openings, and area shapes stay inside the amber outline.'
+        );
+        return;
+      }
+      const wEl = document.getElementById('window-height') as HTMLInputElement | null;
+      const parsed = wEl?.value ? parseFloat(wEl.value) : NaN;
+      setDraftWindowHeightFt(Number.isFinite(parsed) && parsed > 0 ? Math.min(30, Math.max(1, parsed)) : 5);
+      setShowWindowHeightModal(true);
+      return;
+    }
+
+    const ok = toolsRef.current.setTool(toolTarget);
+    if (!ok) {
+      setLayoutHint(
+        'Draw the site boundary (lot) first: click each corner, then click near the first corner or press Enter to close. Walls, rooms, openings, and area shapes stay inside the amber outline.'
+      );
+      return;
+    }
+    setLayoutHint(null);
+    setActiveTool(toolTarget);
+  };
+
+  const handleWallHeightConfirm = () => {
+    const ft = Math.min(30, Math.max(1, draftWallHeightFt));
+    const hEl = document.getElementById('wall-height') as HTMLInputElement | null;
+    if (hEl) hEl.value = String(ft);
+    if (!toolsRef.current) return;
+    toolsRef.current.setTool('wall');
+    setActiveTool('wall');
+    setLayoutHint(null);
+    setShowWallHeightModal(false);
+  };
+
+  const handleWallHeightCancel = () => {
+    setShowWallHeightModal(false);
+  };
+
+  const handleDoorHeightConfirm = () => {
+    const ft = Math.min(30, Math.max(1, draftDoorHeightFt));
+    const dEl = document.getElementById('door-height') as HTMLInputElement | null;
+    if (dEl) dEl.value = String(ft);
+    if (!toolsRef.current) return;
+    toolsRef.current.setTool('door');
+    setActiveTool('door');
+    setLayoutHint(null);
+    setShowDoorHeightModal(false);
+  };
+
+  const handleDoorHeightCancel = () => {
+    setShowDoorHeightModal(false);
+  };
+
+  const handleWindowHeightConfirm = () => {
+    const ft = Math.min(30, Math.max(1, draftWindowHeightFt));
+    const wEl = document.getElementById('window-height') as HTMLInputElement | null;
+    if (wEl) wEl.value = String(ft);
+    if (!toolsRef.current) return;
+    toolsRef.current.setTool('window');
+    setActiveTool('window');
+    setLayoutHint(null);
+    setShowWindowHeightModal(false);
+  };
+
+  const handleWindowHeightCancel = () => {
+    setShowWindowHeightModal(false);
   };
 
   const handleSave = () => {
@@ -246,7 +419,8 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       activeDesignIndex: activeIdx !== -1 ? activeIdx : 0,
       settings: {
         bgColor: canvasBgColor,
-        northAngle: engine.northAngle || 0
+        northAngle: engine.northAngle || 0,
+        planScaleDenominator: (engine as any).planScaleDenominator ?? DEFAULT_PLAN_SCALE_DENOMINATOR,
       },
       designs: currentTabs
     };
@@ -379,10 +553,13 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       engine.scene = [];
       engine.undoStack = [];
       engine.render();
-      setTabs([{ id: 0, name: 'Design 1', scene: [] }]);
+      setTabs([{ id: 0, name: 'Ground floor', scene: [], floorIndex: 0, elevationFt: 0 }]);
       setActiveTabId(0);
       setSelectedItems([]);
       setActiveMenu(null);
+      setLayoutHint(null);
+      toolsRef.current?.setTool('boundary');
+      setActiveTool('boundary');
     }
   };
 
@@ -405,13 +582,28 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       engine.render();
       setActiveTabId(tabId);
       setTabs(updatedTabs);
+      setLayoutHint(null);
+      if (needsSiteBoundary(engine.scene)) {
+        toolsRef.current?.setTool('boundary');
+        setActiveTool('boundary');
+      } else {
+        toolsRef.current?.setTool('select');
+        setActiveTool('select');
+      }
     }
     setActiveMenu(null);
   };
 
   const addTab = () => {
     const newId = tabs.length > 0 ? Math.max(...tabs.map(t => t.id)) + 1 : 0;
-    const newTab = { id: newId, name: `Design ${newId + 1}`, scene: [] };
+    const floorIdx = tabs.length;
+    const newTab: DesignTab = {
+      id: newId,
+      name: `Floor ${floorIdx}`,
+      scene: [],
+      floorIndex: floorIdx,
+      elevationFt: floorIdx * 10,
+    };
     
     // Switch to the new tab immediately
     const engine = engineRef.current;
@@ -426,12 +618,15 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       
       setTabs([...updatedTabs, newTab]);
       setActiveTabId(newId);
+      setLayoutHint(null);
+      toolsRef.current?.setTool('boundary');
+      setActiveTool('boundary');
     }
   };
 
   const removeTab = (tabId: number) => {
     if (tabs.length <= 1) return;
-    if (!confirm('Are you sure you want to delete this design tab?')) return;
+    if (!confirm('Delete this floor? Its layout will be removed.')) return;
 
     const updatedTabs = tabs.filter(t => t.id !== tabId);
     if (tabId === activeTabId) {
@@ -439,7 +634,16 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       setActiveTabId(newActive.id);
       if (engineRef.current) {
         engineRef.current.scene = newActive.scene;
+        engineRef.current.undoStack = [];
         engineRef.current.render();
+        setLayoutHint(null);
+        if (needsSiteBoundary(engineRef.current.scene)) {
+          toolsRef.current?.setTool('boundary');
+          setActiveTool('boundary');
+        } else {
+          toolsRef.current?.setTool('select');
+          setActiveTool('select');
+        }
       }
     }
     setTabs(updatedTabs);
@@ -448,7 +652,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const renameTab = (tabId: number) => {
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) return;
-    const newName = prompt('Enter new tab name:', tab.name);
+    const newName = prompt('Floor name:', tab.name);
     if (newName && newName.trim()) {
       setTabs(tabs.map(t => t.id === tabId ? { ...t, name: newName.trim() } : t));
     }
@@ -489,6 +693,9 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
               setNorthAngle(data.settings.northAngle);
               engine.northAngle = data.settings.northAngle;
             }
+            if (data.settings.planScaleDenominator != null) {
+              (engine as any).planScaleDenominator = data.settings.planScaleDenominator;
+            }
           }
         } else if (data.scene) {
           // Wrap single scene legacy files
@@ -499,6 +706,14 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
         }
         
         engine.render();
+        setLayoutHint(null);
+        if (needsSiteBoundary(engine.scene)) {
+          toolsRef.current?.setTool('boundary');
+          setActiveTool('boundary');
+        } else {
+          toolsRef.current?.setTool('select');
+          setActiveTool('select');
+        }
       } catch (err) {
         alert('Failed to load project file. The file may be corrupt or encrypted with a different key.');
       }
@@ -558,18 +773,53 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
     setAuthError('');
     setIsAuthLoading(true);
 
+    authLog('submit started', {
+      emailLen: authEmail.length,
+      passwordLen: authPassword.length,
+      couponLen: authCoupon.length,
+      emailLooksLikeDev: authEmail.trim() === DEV_LOGIN_EMAIL,
+      passwordMatchesDev: authPassword === DEV_LOGIN_PASSWORD,
+      couponMatchesDev: authCoupon.trim() === DEV_LOGIN_COUPON,
+    });
+
     try {
-      // 1. Coupon Evaluation Encrypted Check
-      // 'ZHJlYW1ob21lQDIwMjY=' is btoa('dreamhome@2026')
-      const encryptedCoupon = btoa(authCoupon);
-      if (encryptedCoupon !== 'ZHJlYW1ob21lQDIwMjY=') {
-        setAuthError('Invalid coupon code.');
+      const email = authEmail.trim();
+      const emailOk = isValidEmail(email);
+      authLog('email validation', { email, emailOk, regexTest: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) });
+
+      if (!emailOk) {
+        authLog('blocked: invalid email format');
+        setAuthError('Enter a valid email address.');
         setIsAuthLoading(false);
         return;
       }
 
-      // 2. Mock Fallback for Admin (to match legacy engine parity)
-      if (authEmail === 'admin@roomio.pro' && authPassword === 'adminpassword') {
+      // 0. Fixed demo credentials (always succeeds, no Supabase)
+      const devEmailMatch = email === DEV_LOGIN_EMAIL;
+      const devPasswordMatch = authPassword === DEV_LOGIN_PASSWORD;
+      const devCouponMatch = authCoupon.trim() === DEV_LOGIN_COUPON;
+      authLog('dev credential check', {
+        devEmailMatch,
+        devPasswordMatch,
+        devCouponMatch,
+        expected: { email: DEV_LOGIN_EMAIL, passwordLen: DEV_LOGIN_PASSWORD.length, coupon: DEV_LOGIN_COUPON },
+      });
+
+      if (devEmailMatch && devPasswordMatch && devCouponMatch) {
+        authLog('success: dev_session (fixed demo credentials)');
+        setUser({
+          id: 'dev_session',
+          email: DEV_LOGIN_EMAIL,
+          role: 'user',
+        });
+        setShowAuthModal(false);
+        setIsAuthLoading(false);
+        return;
+      }
+
+      // 1. Mock admin (optional password gate for admin role)
+      if (email === 'admin@roomio.pro' && authPassword === 'adminpassword') {
+        authLog('success: mock admin');
         const mockAdmin: AppUser = {
           id: 'admin_001',
           email: 'admin@roomio.pro',
@@ -581,44 +831,60 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
         return;
       }
 
-      // 3. Supabase Auth (Real DB)
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: authEmail,
-        password: authPassword
-      });
+      // 2. Supabase when password present — catch throws so mock fallback still works
+      if (authPassword.length > 0) {
+        authLog('calling supabase.signInWithPassword', { email });
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password: authPassword
+          });
 
-      if (error) {
-        // Fallback for ANY valid email/password in development/staging (parity with legacy mock)
-        if (authEmail.length >= 5 && authPassword.length >= 4) {
-          const mockUser: AppUser = {
-            id: 'mock_' + Math.random().toString(36).substr(2, 9),
-            email: authEmail,
-            role: 'user'
-          };
-          setUser(mockUser);
-          setShowAuthModal(false);
-          setIsAuthLoading(false);
-          return;
+          if (error) {
+            authLog('supabase returned error (will try local mock next)', {
+              message: error.message,
+              name: error.name,
+              status: (error as { status?: number }).status,
+            });
+          } else if (data.user) {
+            authLog('success: supabase session', { userId: data.user.id });
+            const newUser: AppUser = {
+              id: data.user.id,
+              email: data.user.email ?? email,
+              role: data.user.email?.includes('admin') ? 'admin' : 'user'
+            };
+            setUser(newUser);
+            setShowAuthModal(false);
+            setIsAuthLoading(false);
+            return;
+          } else {
+            authLog('supabase: no user in response', { hasSession: !!data.session });
+          }
+        } catch (supaErr: unknown) {
+          authLog('supabase threw (continuing to local mock)', {
+            message: supaErr instanceof Error ? supaErr.message : String(supaErr),
+          });
         }
-
-        setAuthError(error.message || 'Invalid email or password.');
-        setIsAuthLoading(false);
-        return;
+      } else {
+        authLog('skipping supabase (empty password)');
       }
 
-      if (data.user) {
-        const newUser: AppUser = {
-          id: data.user.id,
-          email: data.user.email,
-          role: data.user.email?.includes('admin') ? 'admin' : 'user'
-        };
-        setUser(newUser);
-        setShowAuthModal(false);
-      }
-    } catch (err: any) {
-      setAuthError(err.message || 'Authentication failed.');
+      // 3. Local session: valid email is enough (password / coupon optional for now)
+      authLog('success: local mock user (fallback)');
+      const mockUser: AppUser = {
+        id: 'mock_' + Math.random().toString(36).substr(2, 9),
+        email,
+        role: 'user'
+      };
+      setUser(mockUser);
+      setShowAuthModal(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      authLog('unexpected error in handleLoginSubmit', { message: msg, err });
+      setAuthError(msg || 'Authentication failed.');
     } finally {
       setIsAuthLoading(false);
+      authLog('submit finished (loading cleared in finally)');
     }
   };
 
@@ -632,8 +898,210 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
     setUser(null);
   };
 
+  const handleOpen3DPreview = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const currentTabs = [...tabs];
+    const activeIdx = currentTabs.findIndex((t) => t.id === activeTabId);
+    if (activeIdx !== -1) {
+      currentTabs[activeIdx] = { ...currentTabs[activeIdx], scene: [...engine.scene] };
+    }
+    const scene = activeIdx !== -1 ? currentTabs[activeIdx].scene : [...engine.scene];
+    const gridPxPerFoot = (engine as { gridSize?: number }).gridSize ?? 25;
+    const payload = JSON.stringify({ scene, gridPxPerFoot });
+    // localStorage is shared across tabs on the same origin; sessionStorage is not, so new-tab 3D preview would miss the scene otherwise.
+    try {
+      localStorage.setItem(SESSION_3D_SCENE_KEY, payload);
+      sessionStorage.setItem(SESSION_3D_SCENE_KEY, payload);
+    } catch {
+      /* quota / private mode */
+    }
+    setActiveMenu(null);
+    const url = `${window.location.origin}/preview-3d`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="main-wrapper bg-slate-950 font-sans selection:bg-primary/30">
+      {/* Read by lib/sketch-my-home/tools.js when drawing walls (legacy DOM ids). */}
+      <div className="sr-only" aria-hidden="true">
+        <label htmlFor="wall-height">Wall height ft</label>
+        <input id="wall-height" type="number" min={1} max={30} step={0.5} defaultValue={10} />
+        <label htmlFor="wall-thickness">Wall thickness in</label>
+        <input id="wall-thickness" type="range" min={4} max={24} defaultValue={9} />
+        <label htmlFor="wall-line-type">Wall line type</label>
+        <select id="wall-line-type" defaultValue="solid">
+          <option value="solid">solid</option>
+          <option value="dotted">dotted</option>
+        </select>
+        <label htmlFor="door-height">Door opening height ft</label>
+        <input id="door-height" type="number" min={1} max={30} step={0.5} defaultValue={7.5} />
+        <label htmlFor="window-height">Window opening height ft</label>
+        <input id="window-height" type="number" min={1} max={30} step={0.5} defaultValue={5} />
+      </div>
+
+      {showWindowHeightModal && (
+        <div
+          className="fixed inset-0 z-[3200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="window-height-dialog-title"
+          onClick={handleWindowHeightCancel}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-white/10 bg-[#1e1e22] p-6 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="window-height-dialog-title" className="text-lg font-semibold tracking-tight">
+              Window height
+            </h2>
+            <p className="mt-2 text-sm text-white/60">
+              Set the opening height for new windows (default 5 ft). Used in the 3D preview for the window volume and wall dimensions.
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <label htmlFor="window-height-modal-input" className="text-xs uppercase tracking-widest text-white/50">
+                Feet
+              </label>
+              <input
+                id="window-height-modal-input"
+                type="number"
+                min={1}
+                max={30}
+                step={0.5}
+                className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-primary"
+                value={draftWindowHeightFt}
+                onChange={(e) => setDraftWindowHeightFt(parseFloat(e.target.value) || 5)}
+              />
+              <span className="text-sm text-white/40">ft</span>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+                onClick={handleWindowHeightCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-95"
+                onClick={handleWindowHeightConfirm}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDoorHeightModal && (
+        <div
+          className="fixed inset-0 z-[3200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="door-height-dialog-title"
+          onClick={handleDoorHeightCancel}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-white/10 bg-[#1e1e22] p-6 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="door-height-dialog-title" className="text-lg font-semibold tracking-tight">
+              Door height
+            </h2>
+            <p className="mt-2 text-sm text-white/60">
+              Set the opening height for new doors (default 7.5 ft). Used in the 3D preview for the door volume and labels.
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <label htmlFor="door-height-modal-input" className="text-xs uppercase tracking-widest text-white/50">
+                Feet
+              </label>
+              <input
+                id="door-height-modal-input"
+                type="number"
+                min={1}
+                max={30}
+                step={0.5}
+                className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-primary"
+                value={draftDoorHeightFt}
+                onChange={(e) => setDraftDoorHeightFt(parseFloat(e.target.value) || 7.5)}
+              />
+              <span className="text-sm text-white/40">ft</span>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+                onClick={handleDoorHeightCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-95"
+                onClick={handleDoorHeightConfirm}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showWallHeightModal && (
+        <div
+          className="fixed inset-0 z-[3200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wall-height-dialog-title"
+          onClick={handleWallHeightCancel}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-white/10 bg-[#1e1e22] p-6 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="wall-height-dialog-title" className="text-lg font-semibold tracking-tight">
+              Wall height
+            </h2>
+            <p className="mt-2 text-sm text-white/60">
+              Set the height for new wall segments (default 10 ft). You can change individual walls later in the properties panel.
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <label htmlFor="wall-height-modal-input" className="text-xs uppercase tracking-widest text-white/50">
+                Feet
+              </label>
+              <input
+                id="wall-height-modal-input"
+                type="number"
+                min={1}
+                max={30}
+                step={0.5}
+                className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-primary"
+                value={draftWallHeightFt}
+                onChange={(e) => setDraftWallHeightFt(parseFloat(e.target.value) || 10)}
+              />
+              <span className="text-sm text-white/40">ft</span>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+                onClick={handleWallHeightCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-95"
+                onClick={handleWallHeightConfirm}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="win-menu-bar relative z-[100]">
         <div className="menu-item-group flex items-center gap-1 h-full px-2">
           {/* File Menu */}
@@ -677,6 +1145,13 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                 <div className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2 text-white/90 hover:text-white" onClick={toggleVastu}>
                   <div className={`w-3 h-3 border border-white/40 flex items-center justify-center`}>{showVastu && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}</div>
                   Vastu Overlay
+                </div>
+                <div
+                  className="px-4 py-2 hover:bg-primary/20 cursor-pointer text-xs flex items-center gap-2 text-white/90 hover:text-white"
+                  onClick={handleOpen3DPreview}
+                >
+                  <Box size={14} className="opacity-70" />
+                  3D preview (walls)
                 </div>
                 
                 <div className="h-px bg-white/5 my-1" />
@@ -730,7 +1205,16 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
           )}
         </div>
 
-        <div className="flex items-center gap-4 px-3">
+        <div className="flex items-center gap-3 px-3">
+          <button
+            type="button"
+            onClick={handleOpen3DPreview}
+            className="flex items-center gap-1.5 rounded-md border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/90 hover:bg-white/10"
+            title="Open 3D preview in a new tab"
+          >
+            <Box size={14} className="opacity-80" />
+            3D view
+          </button>
           {user ? (
             <button onClick={handleLogout} className="flex items-center gap-2 text-xs opacity-70 hover:opacity-100 transition-opacity">
               <User size={14} /> {user.email} (Sign Out)
@@ -744,7 +1228,8 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       </div>
 
       {/* Design Tabs Bar */}
-      <div className="design-tabs-bar bg-slate-900 border-b border-white/5 flex items-center px-4 overflow-x-auto min-h-[40px] z-10 scrollbar-hide">
+      <div className="design-tabs-bar bg-slate-900 border-b border-white/5 flex items-center px-4 overflow-x-auto min-h-[40px] z-10 scrollbar-hide gap-3">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-white/35 shrink-0">Floors</span>
         <div className="flex gap-1 h-full items-center">
           {tabs.map((tab) => (
             <div 
@@ -767,7 +1252,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
           <button 
             onClick={addTab}
             className="ml-2 flex items-center justify-center w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-white/40 hover:text-primary transition-all p-1"
-            title="Add New Design"
+            title="Add floor (new level)"
           >
             <Plus size={14} />
           </button>
@@ -784,19 +1269,31 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                 <p className="text-sm text-white/50 text-center">Continue your architectural journey</p>
               </div>
               <div className="p-8 pt-0">
-                <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
+                <form noValidate onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
                   <div>
                     <label className="block text-xs font-semibold mb-1 text-white/50">Email Address</label>
-                    <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required placeholder="name@company.com" className="w-full p-3 bg-white/5 border border-white/10 rounded-lg text-white outline-none focus:border-primary transition-colors" />
+                    <input
+                      type="text"
+                      inputMode="email"
+                      autoComplete="email"
+                      value={authEmail}
+                      onChange={e => setAuthEmail(e.target.value)}
+                      required
+                      placeholder="name@company.com"
+                      className="w-full p-3 bg-white/5 border border-white/10 rounded-lg text-white outline-none focus:border-primary transition-colors"
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold mb-1 text-white/50">Password</label>
-                    <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required placeholder="••••••••" className="w-full p-3 bg-white/5 border border-white/10 rounded-lg text-white outline-none focus:border-primary transition-colors" />
+                    <label className="block text-xs font-semibold mb-1 text-white/50">Password <span className="text-white/35 font-normal">(optional)</span></label>
+                    <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Leave blank for quick sign-in" className="w-full p-3 bg-white/5 border border-white/10 rounded-lg text-white outline-none focus:border-primary transition-colors" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold mb-1 text-white/50">Coupon Code</label>
-                    <input type="text" value={authCoupon} onChange={e => setAuthCoupon(e.target.value)} required placeholder="Enter valid coupon code" className="w-full p-3 bg-white/5 border border-white/10 rounded-lg text-white outline-none focus:border-primary transition-colors" />
+                    <label className="block text-xs font-semibold mb-1 text-white/50">Coupon code <span className="text-white/35 font-normal">(optional)</span></label>
+                    <input type="text" value={authCoupon} onChange={e => setAuthCoupon(e.target.value)} placeholder="Optional" className="w-full p-3 bg-white/5 border border-white/10 rounded-lg text-white outline-none focus:border-primary transition-colors" />
                   </div>
+                  <p className="text-[10px] text-white/35 -mt-2">
+                    Demo login is pre-filled (a@b.com / test / coupon). Other valid emails still get a local session if Supabase sign-in does not apply.
+                  </p>
                   
                   {authError && (
                     <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/50 text-red-400 text-xs text-center">
@@ -877,6 +1374,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                   <span className="text-xs opacity-60 font-semibold uppercase tracking-widest">Key</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Select Tool</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">S</kbd></div>
+                <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Site boundary</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">L</kbd></div>
                 <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Wall Tool</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">W</kbd></div>
                 <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Pan Tool</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">P</kbd></div>
                 <div className="flex justify-between py-2 border-b border-white/5"><span className="text-sm">Length Tool</span><kbd className="bg-white/10 px-2 rounded font-mono text-xs">M</kbd></div>
@@ -893,36 +1391,48 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
           <div className="brand px-4">
             <h1>sketch my home</h1>
           </div>
+          {layoutHint && (
+            <div className="mx-3 mb-3 rounded-lg border border-amber-300/80 bg-amber-50 text-amber-950 text-[11px] p-2.5 leading-snug">
+              {layoutHint}
+            </div>
+          )}
           <div className="tools-group h-full overflow-y-auto no-scrollbar pb-24">
             <h3 className="text-xs uppercase text-black/50 mb-2 px-2 tracking-widest font-bold">Tools</h3>
-            <button className={`tool-btn ${activeTool === 'select' ? 'active' : ''}`} onClick={() => handleToolClick('select')}>
+            <button type="button" data-tool="select" className={`tool-btn ${activeTool === 'select' ? 'active' : ''}`} onClick={() => handleToolClick('select')}>
               <MousePointer size={20} /> <span>Select</span>
             </button>
-            <button className={`tool-btn ${activeTool === 'pan' ? 'active' : ''}`} onClick={() => handleToolClick('pan')}>
+            <button type="button" data-tool="pan" className={`tool-btn ${activeTool === 'pan' ? 'active' : ''}`} onClick={() => handleToolClick('pan')}>
               <Hand size={20} /> <span>Pan</span>
             </button>
-            <button className={`tool-btn ${activeTool === 'wall' ? 'active' : ''}`} onClick={() => handleToolClick('wall')}>
+            <h3 className="text-[10px] uppercase text-amber-700/80 mb-1 mt-3 px-2 tracking-widest font-bold">Site (first)</h3>
+            <button type="button" data-tool="boundary" className={`tool-btn border border-amber-200/80 ${activeTool === 'boundary' ? 'active' : ''}`} onClick={() => handleToolClick('boundary')} title="Site boundary (L)">
+              <LandPlot size={20} className="text-amber-700" /> <span>Boundary</span>
+            </button>
+            <button type="button" data-tool="wall" className={`tool-btn ${activeTool === 'wall' ? 'active' : ''}`} onClick={() => handleToolClick('wall')}>
               <Hammer size={20} /> <span>Wall</span>
             </button>
-            <button className={`tool-btn ${activeTool === 'room' ? 'active' : ''}`} onClick={() => handleToolClick('room')}>
+            <button type="button" data-tool="room" className={`tool-btn ${activeTool === 'room' ? 'active' : ''}`} onClick={() => handleToolClick('room')}>
               <Layout size={20} /> <span>Room</span>
             </button>
             <div className="flex gap-2 w-full">
-              <button className={`tool-btn flex-1 ${activeTool === 'measure' ? 'active' : ''}`} onClick={() => handleToolClick('measure')} title="Length Measurement (M)">
+              <button type="button" data-tool="measure" className={`tool-btn flex-1 ${activeTool === 'measure' ? 'active' : ''}`} onClick={() => handleToolClick('measure')} title="Length Measurement (M)">
                 <Ruler size={20} /> <span className="text-[10px]">Length</span>
               </button>
-              <button className={`tool-btn flex-1 ${activeTool === 'measure_area' ? 'active' : ''}`} onClick={() => handleToolClick('measure_area')} title="Area Measurement (A)">
+              <button type="button" data-tool="measure_area" className={`tool-btn flex-1 ${activeTool === 'measure_area' ? 'active' : ''}`} onClick={() => handleToolClick('measure_area')} title="Area Measurement (A)">
                 <Maximize2 size={20} /> <span className="text-[10px]">Area</span>
               </button>
             </div>
 
             <h3 className="text-xs uppercase text-black/50 mt-4 mb-2 px-2 tracking-widest font-bold border-t border-black/10 pt-4">Elements</h3>
             <div className="grid grid-cols-2 gap-2">
-              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'door' ? 'active' : ''}`} onClick={() => handleToolClick('door')}>
+              <button type="button" data-tool="door" className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'door' ? 'active' : ''}`} onClick={() => handleToolClick('door')}>
                 <DoorOpen size={16} /> <span className="text-[9px]">Door</span>
               </button>
-              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'window' ? 'active' : ''}`} onClick={() => handleToolClick('window')}>
+              <button type="button" data-tool="window" className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'window' ? 'active' : ''}`} onClick={() => handleToolClick('window')}>
                 <AppWindow size={16} /> <span className="text-[9px]">Window</span>
+              </button>
+              <button type="button" data-tool="hole" className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'hole' ? 'active' : ''}`} onClick={() => handleToolClick('hole')}>
+                <CircleOff size={16} /> <span className="text-[9px]">Opening</span>
               </button>
               <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'stairs' ? 'active' : ''}`} onClick={() => handleToolClick('stairs')}>
                 <AlignJustify size={16} /> <span className="text-[9px]">Stairs</span>
@@ -1070,7 +1580,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                     <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Wall Altitude (Height)</label>
                     <div className="flex flex-col gap-2">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="font-mono text-blue-500 font-bold">{selectedItems[0].altitude || 8}ft</span>
+                        <span className="font-mono text-blue-500 font-bold">{selectedItems[0].altitude ?? 10}ft</span>
                         <span className="opacity-40 tracking-tighter">1ft — 30ft</span>
                       </div>
                       <input
@@ -1078,7 +1588,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                         min="1"
                         max="30"
                         step="0.5"
-                        value={selectedItems[0].altitude || 8}
+                        value={selectedItems[0].altitude ?? 10}
                         className="w-full h-1.5 bg-black/5 rounded-lg appearance-none cursor-pointer accent-blue-500"
                         onChange={(e) => handleAltitudeChange(parseFloat(e.target.value))}
                       />
@@ -1162,16 +1672,50 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
             </div>
           )}
 
-          <div className="absolute bottom-6 right-6 flex items-center gap-1 bg-white/90 p-1.5 rounded-lg border border-black/10 z-10 backdrop-blur-sm">
-            <button className="p-2 hover:bg-black/10 rounded text-black/70 hover:text-black transition-colors" onClick={() => engineRef.current && (engineRef.current.scale = Math.max(0.1, engineRef.current.scale - 0.1), engineRef.current.render())} title="Zoom Out">
-              <Minus size={16} />
-            </button>
-            <button className="p-2 hover:bg-black/10 rounded text-black/70 hover:text-black transition-colors text-xs font-bold w-12 text-center" onClick={() => engineRef.current && (engineRef.current.scale = 1, engineRef.current.offsetX = 0, engineRef.current.offsetY = 0, engineRef.current.render())} title="Reset Zoom">
-              100%
-            </button>
-            <button className="p-2 hover:bg-black/10 rounded text-black/70 hover:text-black transition-colors" onClick={() => engineRef.current && (engineRef.current.scale = Math.min(5, engineRef.current.scale + 0.1), engineRef.current.render())} title="Zoom In">
-              <Plus size={16} />
-            </button>
+          <div className="absolute bottom-6 right-6 flex flex-col items-end gap-1 z-10">
+            <div className="flex items-center gap-1 bg-white/90 p-1.5 rounded-lg border border-black/10 backdrop-blur-sm">
+              <button
+                type="button"
+                className="p-2 hover:bg-black/10 rounded text-black/70 hover:text-black transition-colors"
+                onClick={() => {
+                  const eng = engineRef.current;
+                  if (!eng) return;
+                  const next = Math.max(eng.minViewScale, eng.scale - 0.1);
+                  eng.zoomAtCanvasCenter(next);
+                }}
+                title="Zoom out (down to 5%)"
+              >
+                <Minus size={16} />
+              </button>
+              <button
+                type="button"
+                className="p-2 hover:bg-black/10 rounded text-black/70 hover:text-black transition-colors text-xs font-bold w-12 text-center"
+                onClick={() => {
+                  const eng = engineRef.current;
+                  if (!eng) return;
+                  eng.setZoom(1);
+                }}
+                title="Reset zoom"
+              >
+                100%
+              </button>
+              <button
+                type="button"
+                className="p-2 hover:bg-black/10 rounded text-black/70 hover:text-black transition-colors"
+                onClick={() => {
+                  const eng = engineRef.current;
+                  if (!eng) return;
+                  const next = Math.min(eng.maxViewScale, eng.scale + 0.1);
+                  eng.zoomAtCanvasCenter(next);
+                }}
+                title="Zoom in (up to 5000%)"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+            <div className="text-[9px] text-black/45 text-right max-w-[200px] leading-tight px-1">
+              Drawing scale 1:{DEFAULT_PLAN_SCALE_DENOMINATOR} · zoom {Math.round(MIN_VIEW_SCALE * 100)}%–{Math.round(MAX_VIEW_SCALE * 100)}%
+            </div>
           </div>
         </div>
       </div>

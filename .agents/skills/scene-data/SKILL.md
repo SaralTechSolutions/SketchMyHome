@@ -71,6 +71,30 @@ An axis-aligned rectangle representing a room area.
 | `width` | number | ✅ | Width (pixels) |
 | `height` | number | ✅ | Height (pixels) |
 
+### 2b. Site boundary (lot)
+
+Closed polygon for the property outline (any angles and side lengths). Legacy projects may store an axis-aligned rectangle as `x`, `y`, `width`, `height` instead of `points`; the engine treats that as four corners.
+
+```json
+{
+  "id": "boundary-abc123def",
+  "type": "boundary",
+  "points": [
+    { "x": 0, "y": 0 },
+    { "x": 400, "y": 0 },
+    { "x": 450, "y": 200 },
+    { "x": 50, "y": 350 }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | ✅ | Unique ID: `boundary-{random9}` |
+| `type` | `"boundary"` | ✅ | Shape type discriminator |
+| `points` | `{x,y}[]` | ✅ (preferred) | At least 3 vertices; edges join consecutive vertices and close back to the first |
+| `x`, `y`, `width`, `height` | number | legacy | Rectangle form when `points` is absent |
+
 ### 3. Object (Element)
 
 A placeable furniture/fixture element from the registry.
