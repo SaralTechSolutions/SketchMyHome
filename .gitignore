@@ -23,3 +23,34 @@ v3.0/
 outputs/
 *.log
 *.next/
+# Next.js build output
+/.next/
+/out/
+
+# Production build
+/build
+
+# Dependencies
+/node_modules/
+/.pnp
+.pnp.js
+
+# Environment variables (Sensitive data)
+.env*.local
+.env
+
+# Testing and coverage
+/coverage
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel-specific
+.vercel
+
+# Logs and debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.DS_Store
