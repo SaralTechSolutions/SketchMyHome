@@ -16,6 +16,14 @@ export function canvasPxToPlan3DFt(
   return { xFt: xPx * s, zFt: -yPx * s };
 }
 
+/**
+ * `mesh.rotation.y` so a `BoxGeometry(length, …, thickness)` has its **length** axis along plan
+ * direction (ΔxFt, ΔzFt) on the XZ floor. Matches Three.js `makeRotationY`: local +X → (cos θ, 0, -sin θ).
+ */
+export function wallBoxRotationYFromPlanDelta(dxFt: number, dzFt: number): number {
+  return -Math.atan2(dzFt, dxFt);
+}
+
 export type WallMeshSpec = {
   id: string;
   position: THREE.Vector3;
@@ -96,13 +104,15 @@ export function wallMeshesFromScene(
 
     const mx = (start.xFt + end.xFt) / 2;
     const mz = (start.zFt + end.zFt) / 2;
-    const rotationY = Math.atan2(dz, dx);
+    const rotationY = wallBoxRotationYFromPlanDelta(dx, dz);
+    /** Slight overlap so adjacent wall boxes meet at corners after rotation (miters not modeled). */
+    const lengthGlue = Math.min(thicknessFt * 0.35, lenFt * 0.04);
 
     out.push({
       id: item.id,
       position: new THREE.Vector3(mx, heightFt / 2, mz),
       rotationY,
-      lengthFt: lenFt,
+      lengthFt: lenFt + lengthGlue,
       heightFt,
       thicknessFt,
     });
@@ -137,7 +147,7 @@ export function boundarySegmentsFromScene(
 
     const mx = (a.xFt + b.xFt) / 2;
     const mz = (a.zFt + b.zFt) / 2;
-    const rotationY = Math.atan2(dz, dx);
+    const rotationY = wallBoxRotationYFromPlanDelta(dx, dz);
 
     // Lengthen slightly so separate boxes overlap at corners (fallback path only).
     const lenExtended = lenFt + 2 * thicknessFt;

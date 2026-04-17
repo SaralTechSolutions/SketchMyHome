@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   boundingBoxFromWallSpecs,
   canvasPxToPlan3DFt,
+  wallBoxRotationYFromPlanDelta,
   type WallMeshSpec,
 } from '@/lib/plan3d/wallMeshesFromScene';
 import { DEFAULT_GRID_PX_PER_FOOT } from '@/lib/plan3d/constants';
@@ -181,7 +182,7 @@ function openingSpecsForSubtype(
     const lenW = Math.hypot(wdx, wdy) || 1;
     const worldDx = (wdx / lenW) * localW * s;
     const worldDz = (-wdy / lenW) * localW * s;
-    const rotationY = Math.atan2(worldDz, worldDx);
+    const rotationY = wallBoxRotationYFromPlanDelta(worldDx, worldDz);
 
     const center = canvasPxToPlan3DFt(cx, cy, gridPxPerFoot);
     const openingHeightFt = altitudeOpening(item, defaultAltitudeFt);

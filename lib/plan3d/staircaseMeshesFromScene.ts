@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { canvasPxToPlan3DFt } from '@/lib/plan3d/wallMeshesFromScene';
+import { canvasPxToPlan3DFt, wallBoxRotationYFromPlanDelta } from '@/lib/plan3d/wallMeshesFromScene';
 import { DEFAULT_GRID_PX_PER_FOOT } from '@/lib/plan3d/constants';
 
 /** One tread box in the staircase group's local space (Y up, +Z along the flight). */
@@ -113,7 +113,7 @@ export function staircaseMeshesFromScene(
     const lenW = Math.hypot(wdx, wdy) || 1;
     const worldDx = (wdx / lenW) * localW * s;
     const worldDz = (-wdy / lenW) * localW * s;
-    const rotationY = Math.atan2(worldDz, worldDx);
+    const rotationY = wallBoxRotationYFromPlanDelta(worldDx, worldDz);
 
     const runWidthFt = localW * s;
     const runLengthFt = localH * s;

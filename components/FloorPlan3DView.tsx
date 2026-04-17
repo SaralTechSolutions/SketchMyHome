@@ -227,9 +227,10 @@ function LotFloorFill({
     if (points.length < 3) return null;
     const s = 1 / gridPxPerFoot;
     const shape = new THREE.Shape();
-    shape.moveTo(points[0].x * s, points[0].y * s);
+    // Same XZ mapping as `canvasPxToPlan3DFt` (canvas Y-down → negate for shape plane before rotateX).
+    shape.moveTo(points[0].x * s, -points[0].y * s);
     for (let i = 1; i < points.length; i++) {
-      shape.lineTo(points[i].x * s, points[i].y * s);
+      shape.lineTo(points[i].x * s, -points[i].y * s);
     }
     shape.closePath();
     const geom = new THREE.ShapeGeometry(shape);

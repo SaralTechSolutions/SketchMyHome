@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // @ts-ignore
 import { CanvasEngine } from '@/lib/sketch-my-home/engine';
 import { createClient } from '@/utils/supabase/client';
-import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand, DoorOpen, AppWindow, AlignJustify, Bed, Circle, Library, Bath, Droplets, Armchair, Type, Maximize2, Minus, Plus, Maximize, Ruler, Box, LandPlot, CircleOff, Layers, Image } from 'lucide-react';
+import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand, DoorOpen, AppWindow, AlignJustify, Bed, Circle, Library, Bath, Droplets, Armchair, Type, Maximize2, Minus, Plus, Maximize, Ruler, Box, LandPlot, CircleOff, Layers, Image, Home } from 'lucide-react';
 // @ts-ignore
 import { ToolsManager } from '@/lib/sketch-my-home/tools';
 import { SketchMyHomeCrypto } from '@/lib/sketch-my-home/crypto';
@@ -20,9 +20,21 @@ import {
   MIN_VIEW_SCALE,
   MAX_VIEW_SCALE,
   syncObjectAabbFromPolygonPoints,
+  getRoomPoints,
 } from '@/lib/sketch-my-home/planBoundary';
 
 const AUTH_LOG_PREFIX = '[SketchMyHome auth]';
+
+const ROOM_TYPE_OPTIONS = [
+  { id: 'living_room', label: 'Living room' },
+  { id: 'dining_room', label: 'Dining room' },
+  { id: 'bedroom', label: 'Bedroom' },
+  { id: 'bathroom', label: 'Bathroom' },
+  { id: 'kitchen', label: 'Kitchen' },
+  { id: 'pooja_room', label: 'Pooja room' },
+  { id: 'reading_room', label: 'Reading room' },
+  { id: 'office_room', label: 'Office room' },
+] as const;
 
 /** Composite onto white so PNG alpha does not leave holes in plan fills. */
 function dataUrlToOpaquePng(dataUrl: string): Promise<string> {
@@ -142,6 +154,9 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   /** Shown before the Window tool activates; sets `#window-height` for new windows (3D opening height). */
   const [showWindowHeightModal, setShowWindowHeightModal] = useState(false);
   const [draftWindowHeightFt, setDraftWindowHeightFt] = useState(5);
+
+  /** Pick room category before drawing the room polygon. */
+  const [showRoomTypeModal, setShowRoomTypeModal] = useState(false);
 
   // Design Tabs State
   const [tabs, setTabs] = useState<DesignTab[]>([
@@ -325,18 +340,106 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   }, [showAdminModal, user]);
 
   useEffect(() => {
-    if (!showWallHeightModal && !showDoorHeightModal && !showWindowHeightModal) return;
+    if (!showWallHeightModal && !showDoorHeightModal && !showWindowHeightModal && !showRoomTypeModal) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         setShowWallHeightModal(false);
         setShowDoorHeightModal(false);
         setShowWindowHeightModal(false);
+        setShowRoomTypeModal(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showWallHeightModal, showDoorHeightModal, showWindowHeightModal]);
+  }, [showWallHeightModal, showDoorHeightModal, showWindowHeightModal, showRoomTypeModal]);
+
+  const confirmRoomType = (roomTypeId: string) => {
+    const tools = toolsRef.current;
+    const engine = engineRef.current;
+    if (!tools || !engine) return;
+    if (needsSiteBoundary(engine.scene)) {
+      setLayoutHint(
+        'Draw the site boundary (lot) first: click each corner, then click near the first corner or press Enter to close. Walls, rooms, openings, and area shapes stay inside the amber outline.'
+      );
+      setShowRoomTypeModal(false);
+      return;
+    }
+    tools.setPendingRoomType(roomTypeId);
+    const ok = tools.setTool('room');
+    if (!ok) {
+      setLayoutHint(
+        'Draw the site boundary (lot) first: click each corner, then click near the first corner or press Enter to close. Walls, rooms, openings, and area shapes stay inside the amber outline.'
+      );
+      setShowRoomTypeModal(false);
+      return;
+    }
+    setShowRoomTypeModal(false);
+    setLayoutHint(null);
+    setActiveTool('room');
+  };
+
+  const handleRoomReadyBuildWalls = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    const selectedRooms = engine.selectedItems.filter((s: any) => s.type === 'room');
+    const targets =
+      selectedRooms.length > 0 ? selectedRooms : engine.scene.filter((s: any) => s.type === 'room');
+    if (targets.length === 0) {
+      setLayoutHint('Add at least one room (outline), or select a room, then press Room is ready.');
+      return;
+    }
+
+    const thicknessInput = document.getElementById('wall-thickness') as HTMLInputElement | null;
+    const inchVal = thicknessInput ? parseInt(thicknessInput.value, 10) : 9;
+    const thickness = Math.round(inchVal * (engine.gridSize / 12) * 100) / 100;
+    const typeInput = document.getElementById('wall-line-type') as HTMLSelectElement | null;
+    const lineType = typeInput?.value || 'solid';
+    const heightInput = document.getElementById('wall-height') as HTMLInputElement | null;
+    let altitudeFt = 10;
+    if (heightInput?.value !== '') {
+      const v = parseFloat(heightInput?.value ?? '');
+      if (Number.isFinite(v) && v > 0) altitudeFt = Math.min(30, Math.max(1, v));
+    }
+
+    const targetIds = new Set(targets.map((r: any) => r.id));
+    const kept = engine.scene.filter(
+      (s: any) => !(s.type === 'wall' && s.sourceRoomId && targetIds.has(s.sourceRoomId))
+    );
+    const newWalls: any[] = [];
+    const MIN_LEN = 3;
+
+    for (const room of targets) {
+      const corners = getRoomPoints(room);
+      if (!corners || corners.length < 3) continue;
+      const n = corners.length;
+      for (let i = 0; i < n; i++) {
+        const a = corners[i];
+        const b = corners[(i + 1) % n];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        if (len < MIN_LEN) continue;
+        newWalls.push({
+          id: `wall-${Math.random().toString(36).substr(2, 9)}`,
+          type: 'wall',
+          startX: a.x,
+          startY: a.y,
+          endX: b.x,
+          endY: b.y,
+          thickness,
+          lineType,
+          altitude: altitudeFt,
+          sourceRoomId: room.id,
+        });
+      }
+    }
+
+    engine.scene = [...kept, ...newWalls];
+    engine.buildJointCache();
+    engine.render();
+    engine.triggerSceneChange();
+    setLayoutHint(null);
+  };
 
   const handleToolClick = (toolTarget: string) => {
     if (!toolsRef.current || !engineRef.current) return;
@@ -380,6 +483,17 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
       const parsed = wEl?.value ? parseFloat(wEl.value) : NaN;
       setDraftWindowHeightFt(Number.isFinite(parsed) && parsed > 0 ? Math.min(30, Math.max(1, parsed)) : 5);
       setShowWindowHeightModal(true);
+      return;
+    }
+
+    if (toolTarget === 'room') {
+      if (needsSiteBoundary(engineRef.current.scene)) {
+        setLayoutHint(
+          'Draw the site boundary (lot) first: click each corner, then click near the first corner or press Enter to close. Walls, rooms, openings, and area shapes stay inside the amber outline.'
+        );
+        return;
+      }
+      setShowRoomTypeModal(true);
       return;
     }
 
@@ -1151,6 +1265,49 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
         </div>
       )}
 
+      {showRoomTypeModal && (
+        <div
+          className="fixed inset-0 z-[3200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="room-type-dialog-title"
+          onClick={() => setShowRoomTypeModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-white/10 bg-[#1e1e22] p-6 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="room-type-dialog-title" className="text-lg font-semibold tracking-tight">
+              Room type
+            </h2>
+            <p className="mt-2 text-sm text-white/60">
+              Choose how this space is used. Then click corners inside the site boundary to outline the room (like the lot boundary); click near the first corner or press Enter to finish. Drag vertices to adjust. When the outline looks right, press <span className="font-medium text-white/90">Room is ready</span> next to 3D view to generate walls along the outline.
+            </p>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {ROOM_TYPE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-left text-sm font-medium text-white/90 hover:bg-primary/25 hover:border-primary/40 transition-colors"
+                  onClick={() => confirmRoomType(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                className="rounded-lg px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+                onClick={() => setShowRoomTypeModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showWallHeightModal && (
         <div
           className="fixed inset-0 z-[3200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
@@ -1308,7 +1465,16 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
           )}
         </div>
 
-        <div className="flex items-center gap-3 px-3">
+        <div className="flex items-center gap-2 px-3 flex-wrap justify-end">
+          <button
+            type="button"
+            onClick={handleRoomReadyBuildWalls}
+            className="flex items-center gap-1.5 rounded-md border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-100 hover:bg-emerald-500/25"
+            title="Create wall segments along each selected room outline (or all rooms if none selected). Replaces walls previously generated from the same room."
+          >
+            <Home size={14} className="opacity-90" />
+            Room is ready
+          </button>
           <button
             type="button"
             onClick={handleOpen3DPreview}
