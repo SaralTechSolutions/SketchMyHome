@@ -65,6 +65,24 @@ const DEMO_SCENE: unknown[] = [
     thickness: (6 * DEFAULT_GRID_PX_PER_FOOT) / 12,
     altitude: 9,
   },
+  /** Angled footprint (polygon), same as designer “Staircase” after placing corners. */
+  {
+    id: 'staircase-demo',
+    type: 'object',
+    subType: 'staircase',
+    x: 240,
+    y: 150,
+    width: 115,
+    height: 210,
+    rotation: 0,
+    widthFt: 3,
+    points: [
+      { x: 260, y: 160 },
+      { x: 340, y: 150 },
+      { x: 355, y: 320 },
+      { x: 240, y: 360 },
+    ],
+  },
 ];
 
 export default function Preview3DPage() {
@@ -101,7 +119,7 @@ export default function Preview3DPage() {
           <p className="text-xs text-slate-400">
             {source === 'editor'
               ? 'Scene from editor (session): walls and site boundary. Drag to orbit, scroll to zoom.'
-              : 'Demo: site boundary (amber) and walls. Use View → 3D preview in the designer to load your plan.'}
+              : 'Demo: site boundary, walls, and a staircase. Use View → 3D preview in the designer to load your plan.'}
           </p>
         </div>
         <Link

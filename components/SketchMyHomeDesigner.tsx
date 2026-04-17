@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // @ts-ignore
 import { CanvasEngine } from '@/lib/sketch-my-home/engine';
 import { createClient } from '@/utils/supabase/client';
-import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand, DoorOpen, AppWindow, AlignJustify, Bed, Circle, Library, Bath, Droplets, Armchair, Type, Maximize2, Minus, Plus, Maximize, Ruler, Box, LandPlot, CircleOff } from 'lucide-react';
+import { Layout, Hammer, Square, Trash2, Undo, Save, User, LogIn, MousePointer, Hand, DoorOpen, AppWindow, AlignJustify, Bed, Circle, Library, Bath, Droplets, Armchair, Type, Maximize2, Minus, Plus, Maximize, Ruler, Box, LandPlot, CircleOff, Layers, Image } from 'lucide-react';
 // @ts-ignore
 import { ToolsManager } from '@/lib/sketch-my-home/tools';
 import { SketchMyHomeCrypto } from '@/lib/sketch-my-home/crypto';
@@ -19,9 +19,45 @@ import {
   DEFAULT_PLAN_SCALE_DENOMINATOR,
   MIN_VIEW_SCALE,
   MAX_VIEW_SCALE,
+  syncObjectAabbFromPolygonPoints,
 } from '@/lib/sketch-my-home/planBoundary';
 
 const AUTH_LOG_PREFIX = '[SketchMyHome auth]';
+
+/** Composite onto white so PNG alpha does not leave holes in plan fills. */
+function dataUrlToOpaquePng(dataUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new globalThis.Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (!w || !h) {
+          resolve(dataUrl);
+          return;
+        }
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0);
+        resolve(c.toDataURL('image/png'));
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = dataUrl;
+  });
+}
+
+const PLAN_IMAGE_SUBTYPES = ['door', 'window', 'hole', 'frame'] as const;
 
 function authLog(step: string, detail?: Record<string, unknown>) {
   if (detail) {
@@ -70,6 +106,7 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
   const toolsRef = useRef<ToolsManager | null>(null);
+  const planImageInputRef = useRef<HTMLInputElement | null>(null);
   const [activeTool, setActiveTool] = useState<string>('boundary');
   const [layoutHint, setLayoutHint] = useState<string | null>(null);
   const [user, setUser] = useState<AppUser | null>(initialUser);
@@ -517,6 +554,72 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
     engine.selectedItems.forEach((item: any) => {
       if (item.type === 'wall') {
         item.altitude = val;
+      }
+    });
+    engine.render();
+    setSelectedItems([...engine.selectedItems]);
+  };
+
+  const handlePlanImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const engine = engineRef.current;
+    if (!engine) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const raw = reader.result as string;
+      try {
+        const opaque = await dataUrlToOpaquePng(raw);
+        engine.selectedItems.forEach((item: any) => {
+          if (item.type === 'object' && PLAN_IMAGE_SUBTYPES.includes(item.subType)) {
+            item.imageDataUrl = opaque;
+          }
+        });
+        engine.render();
+        engine.triggerSceneChange();
+        setSelectedItems([...engine.selectedItems]);
+      } catch {
+        /* ignore */
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleClearPlanImage = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.selectedItems.forEach((item: any) => {
+      if (item.type === 'object' && PLAN_IMAGE_SUBTYPES.includes(item.subType)) {
+        delete item.imageDataUrl;
+      }
+    });
+    engine.render();
+    engine.triggerSceneChange();
+    setSelectedItems([...engine.selectedItems]);
+  };
+
+  const handleStaircaseWidthFtChange = (valFt: number) => {
+    const engine = engineRef.current;
+    if (!engine || !Number.isFinite(valFt)) return;
+    const ft = Math.min(20, Math.max(0.5, valFt));
+    const targetWpx = ft * engine.gridSize;
+    engine.selectedItems.forEach((item: any) => {
+      if (item.type === 'object' && item.subType === 'staircase') {
+        item.widthFt = ft;
+        if (item.points && item.points.length >= 3) {
+          const cx = item.x + item.width / 2;
+          const cy = item.y + item.height / 2;
+          const ref = Math.max(item.width, 1e-6);
+          const scale = targetWpx / ref;
+          for (const p of item.points) {
+            p.x = cx + (p.x - cx) * scale;
+            p.y = cy + (p.y - cy) * scale;
+          }
+          syncObjectAabbFromPolygonPoints(item);
+        } else {
+          item.width = Math.round(targetWpx * 100) / 100;
+        }
       }
     });
     engine.render();
@@ -1434,8 +1537,20 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
               <button type="button" data-tool="hole" className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'hole' ? 'active' : ''}`} onClick={() => handleToolClick('hole')}>
                 <CircleOff size={16} /> <span className="text-[9px]">Opening</span>
               </button>
-              <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'stairs' ? 'active' : ''}`} onClick={() => handleToolClick('stairs')}>
+              <button type="button" data-tool="stairs" className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'stairs' ? 'active' : ''}`} onClick={() => handleToolClick('stairs')}>
                 <AlignJustify size={16} /> <span className="text-[9px]">Stairs</span>
+              </button>
+              <button type="button" data-tool="staircase" className={`tool-btn !min-h-[60px] !h-auto col-span-2 ${activeTool === 'staircase' ? 'active' : ''}`} onClick={() => handleToolClick('staircase')} title="Up to 4 corners (triangle or quad). Click each corner, then click near the first point or press Enter to finish; drag vertices to adjust.">
+                <Layers size={16} /> <span className="text-[9px]">Staircase</span>
+              </button>
+              <button
+                type="button"
+                data-tool="frame"
+                className={`tool-btn !min-h-[60px] !h-auto col-span-2 border border-violet-200/90 ${activeTool === 'frame' ? 'active' : ''}`}
+                onClick={() => handleToolClick('frame')}
+                title="Draw a purple wall frame (polygon). Add a photo in the properties panel; drag corners to resize like the site boundary."
+              >
+                <Image size={16} className="text-violet-700" /> <span className="text-[9px]">Wall frame</span>
               </button>
               <button className={`tool-btn !min-h-[60px] !h-auto ${activeTool === 'bed' ? 'active' : ''}`} onClick={() => handleToolClick('bed')}>
                 <Bed size={16} /> <span className="text-[9px]">Bed</span>
@@ -1604,6 +1719,72 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                         <span className="font-bold uppercase tracking-tight">{selectedItems[0].subType}</span>
                       </div>
                       
+                      {selectedItems.length === 1 &&
+                        selectedItems[0].type === 'object' &&
+                        PLAN_IMAGE_SUBTYPES.includes(selectedItems[0].subType) && (
+                          <div className="flex flex-col gap-2 mt-2 border-t border-black/5 pt-3">
+                            <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">
+                              Plan image (opaque)
+                            </label>
+                            <p className="text-[10px] text-black/45 leading-snug">
+                              Resize the element on canvas to fit; transparent areas are filled with white.
+                            </p>
+                            <div className="flex gap-2 flex-wrap">
+                              <button
+                                type="button"
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-50 text-violet-800 border border-violet-200 hover:bg-violet-100"
+                                onClick={() => planImageInputRef.current?.click()}
+                              >
+                                Choose image…
+                              </button>
+                              {selectedItems[0].imageDataUrl && (
+                                <button
+                                  type="button"
+                                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-black/5 text-black/70 border border-black/10 hover:bg-black/10"
+                                  onClick={handleClearPlanImage}
+                                >
+                                  Remove image
+                                </button>
+                              )}
+                            </div>
+                            <input
+                              ref={planImageInputRef}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handlePlanImageFile}
+                            />
+                          </div>
+                        )}
+
+                      {selectedItems[0].subType === 'staircase' && (
+                        <div className="flex flex-col gap-2 mt-2 border-t border-black/5 pt-3">
+                          <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Width (ft)</label>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-mono text-rose-700 font-bold">
+                              {(selectedItems[0].widthFt != null && Number.isFinite(selectedItems[0].widthFt)
+                                ? selectedItems[0].widthFt
+                                : selectedItems[0].width / (engineRef.current?.gridSize ?? 25)
+                              ).toFixed(1)} ft
+                            </span>
+                            <span className="opacity-40 tracking-tighter">0.5–20 ft</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0.5}
+                            max={20}
+                            step={0.5}
+                            value={
+                              selectedItems[0].widthFt != null && Number.isFinite(selectedItems[0].widthFt)
+                                ? selectedItems[0].widthFt
+                                : Math.round((selectedItems[0].width / (engineRef.current?.gridSize ?? 25)) * 10) / 10
+                            }
+                            className="w-full h-1.5 bg-black/5 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                            onChange={(e) => handleStaircaseWidthFtChange(parseFloat(e.target.value))}
+                          />
+                        </div>
+                      )}
+
                       {selectedItems[0].subType === 'text' && (
                         <div className="flex flex-col gap-2 mt-2">
                            <label className="text-[10px] uppercase tracking-widest font-bold opacity-50">Content</label>
@@ -1629,21 +1810,28 @@ export default function SketchMyHomeDesigner({ initialUser }: { initialUser: App
                         </div>
                       )}
 
-                      {/* Rotation Slider for all objects including Text */}
-                      <div className="flex flex-col gap-2 mt-2 border-t border-black/5 pt-3">
-                         <div className="flex justify-between items-center text-[10px] uppercase tracking-widest font-bold">
-                           <span className="opacity-50">Rotation</span>
-                           <span className="text-primary">{selectedItems[0].rotation || 0}°</span>
-                         </div>
-                         <input
-                           type="range"
-                           min="0"
-                           max="360"
-                           value={selectedItems[0].rotation || 0}
-                           className="w-full h-1.5 bg-black/5 rounded-lg appearance-none cursor-pointer accent-primary"
-                           onChange={(e) => handleRotationChange(parseInt(e.target.value))}
-                         />
-                      </div>
+                      {/* Rotation — hidden for polygon staircase / wall frame (footprint is edited by vertices) */}
+                      {!(
+                        selectedItems[0].type === 'object' &&
+                        ['staircase', 'frame'].includes(selectedItems[0].subType) &&
+                        Array.isArray(selectedItems[0].points) &&
+                        selectedItems[0].points.length >= 3
+                      ) && (
+                        <div className="flex flex-col gap-2 mt-2 border-t border-black/5 pt-3">
+                          <div className="flex justify-between items-center text-[10px] uppercase tracking-widest font-bold">
+                            <span className="opacity-50">Rotation</span>
+                            <span className="text-primary">{selectedItems[0].rotation || 0}°</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="360"
+                            value={selectedItems[0].rotation || 0}
+                            className="w-full h-1.5 bg-black/5 rounded-lg appearance-none cursor-pointer accent-primary"
+                            onChange={(e) => handleRotationChange(parseInt(e.target.value))}
+                          />
+                        </div>
+                      )}
                     </div>
                     {selectedItems.length === 1 && selectedItems[0].subType !== 'text' && (
                       <div className="flex justify-between pt-1">

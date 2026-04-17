@@ -18,6 +18,7 @@ import {
 } from '@/lib/plan3d/doors3dFromScene';
 import type { WallOpening3DBase } from '@/lib/plan3d/wallOpening3d';
 import { DEFAULT_GRID_PX_PER_FOOT } from '@/lib/plan3d/constants';
+import { staircaseMeshesFromScene } from '@/lib/plan3d/staircaseMeshesFromScene';
 
 function FitCamera({
   center,
@@ -111,6 +112,53 @@ function BoundaryEdges({
 
 const BOUNDARY_THICKNESS_FT = 3 / 12;
 const BOUNDARY_HEIGHT_FT = 2.5;
+
+/** Light red, semi-transparent — distinct from amber site boundary. */
+const STAIR_3D = {
+  tread: '#fca5a5',
+  treadEdge: '#b91c1c',
+  roughness: 0.5,
+  metalness: 0.06,
+  opacity: 0.62,
+  emissive: '#450a0a',
+  emissiveIntensity: 0.06,
+} as const;
+
+function StaircaseMeshes({
+  specs,
+}: {
+  specs: ReturnType<typeof staircaseMeshesFromScene>;
+}) {
+  return (
+    <>
+      {specs.map((st) => (
+        <group
+          key={st.id}
+          position={[st.position.x, st.position.y, st.position.z]}
+          rotation={[0, st.rotationY, 0]}
+          renderOrder={3}
+        >
+          {st.treads.map((t, i) => (
+            <mesh key={`${st.id}-t-${i}`} position={[t.cx, t.cy, t.cz]} castShadow receiveShadow>
+              <boxGeometry args={[t.w, t.h, t.d]} />
+              <meshStandardMaterial
+                color={STAIR_3D.tread}
+                transparent
+                opacity={STAIR_3D.opacity}
+                roughness={STAIR_3D.roughness}
+                metalness={STAIR_3D.metalness}
+                emissive={STAIR_3D.emissive}
+                emissiveIntensity={STAIR_3D.emissiveIntensity}
+                depthWrite={false}
+              />
+              <Edges color={STAIR_3D.treadEdge} threshold={10} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </>
+  );
+}
 
 function WallOpeningMeshes({ openings }: { openings: WallOpening3DBase[] }) {
   return (
@@ -235,6 +283,10 @@ export default function FloorPlan3DView({
     () => windowOpenings3DFromScene(scene, gridPxPerFoot),
     [scene, gridPxPerFoot]
   );
+  const staircaseSpecs = useMemo(
+    () => staircaseMeshesFromScene(scene, gridPxPerFoot),
+    [scene, gridPxPerFoot]
+  );
   const allOpeningSpecs = useMemo(
     () => [...doorOpenings, ...windowOpenings].map((o) => o.getMeshSpec()),
     [doorOpenings, windowOpenings]
@@ -261,8 +313,8 @@ export default function FloorPlan3DView({
   }, [boundaryRingGeometry]);
 
   const { center, size } = useMemo(
-    () => combinedBounds3D(specs, boundarySpecs, allOpeningSpecs),
-    [specs, boundarySpecs, allOpeningSpecs]
+    () => combinedBounds3D(specs, boundarySpecs, allOpeningSpecs, staircaseSpecs),
+    [specs, boundarySpecs, allOpeningSpecs, staircaseSpecs]
   );
 
   return (
@@ -311,6 +363,7 @@ export default function FloorPlan3DView({
         <BoundaryEdges specs={boundarySpecs} />
       )}
       <Walls specs={specs} />
+      <StaircaseMeshes specs={staircaseSpecs} />
       <WallOpeningMeshes openings={[...doorOpenings, ...windowOpenings]} />
       <OrbitControls makeDefault target={[center.x, center.y * 0.35, center.z]} maxPolarAngle={Math.PI / 2 - 0.08} />
     </Canvas>

@@ -10,6 +10,8 @@ import {
   WindowOpening3D,
   type WallOpeningMeshSpec,
 } from '@/lib/plan3d/wallOpening3d';
+import type { StaircaseMeshSpec } from '@/lib/plan3d/staircaseMeshesFromScene';
+import { expandBoxWithStaircases } from '@/lib/plan3d/staircaseMeshesFromScene';
 
 export type { WallOpeningMeshSpec, WallOpeningVisualStyle, WallOpeningKind } from '@/lib/plan3d/wallOpening3d';
 export {
@@ -290,7 +292,8 @@ export function windowOpenings3DFromScene(
 export function combinedBounds3D(
   wallSpecs: WallMeshSpec[],
   boundarySpecs: WallMeshSpec[],
-  openingSpecs: WallOpeningMeshSpec[]
+  openingSpecs: WallOpeningMeshSpec[],
+  staircaseSpecs?: StaircaseMeshSpec[]
 ): { center: THREE.Vector3; size: number } {
   const box = boundingBoxFromWallSpecs([...wallSpecs, ...boundarySpecs]);
   for (const d of openingSpecs) {
@@ -300,6 +303,9 @@ export function combinedBounds3D(
       box.expandByPoint(new THREE.Vector3(c.x, y0, c.z));
       box.expandByPoint(new THREE.Vector3(c.x, y1, c.z));
     }
+  }
+  if (staircaseSpecs && staircaseSpecs.length > 0) {
+    expandBoxWithStaircases(box, staircaseSpecs);
   }
   const center = new THREE.Vector3();
   const sphere = new THREE.Sphere();
